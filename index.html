@@ -1,0 +1,1544 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistem Katalog & Generator Part Number - Connected</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .sidebar-active {
+            background-color: #1e293b;
+            border-left: 4px solid #3b82f6;
+        }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800 font-sans min-h-screen flex flex-col">
+
+    <!-- GLOBAL OVERLAY LOADER -->
+    <div id="globalLoader" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex flex-col items-center justify-center text-white hidden">
+        <i class="fa-solid fa-circle-notch fa-spin text-4xl text-blue-400 mb-3"></i>
+        <div id="loaderText" class="text-sm font-semibold tracking-wide">Menghubungkan ke Google Sheets...</div>
+    </div>
+
+    <!-- TOP NAVBAR -->
+    <header class="bg-slate-900 text-white shadow-md flex justify-between items-center px-6 py-3 sticky top-0 z-50">
+        <div class="flex items-center space-x-3">
+            <i class="fa-solid fa-microchip text-blue-400 text-2xl"></i>
+            <div>
+                <h1 class="font-bold text-lg leading-tight">PN-Master Catalog</h1>
+                <p class="text-xs text-slate-400">Connected to Google Sheets Database</p>
+            </div>
+        </div>
+        <div class="flex items-center space-x-4">
+            <div id="userInfo" class="text-sm text-right hidden sm:block">
+                <div id="userName" class="font-semibold text-slate-200">Nama User</div>
+                <div id="userRole" class="text-xs text-blue-400 uppercase font-bold">Role</div>
+            </div>
+            <button id="logoutBtn" onclick="handleLogout()" class="bg-red-600 hover:bg-red-700 text-white text-xs font-semibold px-3 py-1.5 rounded transition flex items-center gap-1.5 hidden">
+                <i class="fa-solid fa-right-from-bracket"></i> Keluar
+            </button>
+        </div>
+    </header>
+
+    <div class="flex flex-1 overflow-hidden">
+        <!-- SIDEBAR NAVIGATION -->
+        <aside id="sidebar" class="w-64 bg-slate-800 text-slate-300 flex flex-col justify-between hidden md:flex">
+            <nav class="p-4 space-y-1">
+                <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3 px-3">Menu Utama</div>
+                <a href="#" onclick="switchTab('generator')" id="nav-generator" class="flex items-center space-x-3 px-3 py-2.5 rounded-lg transition sidebar-active text-white">
+                    <i class="fa-solid fa-wand-magic-sparkles text-blue-400 w-5"></i>
+                    <span>Generator PN</span>
+                </a>
+                <a href="#" onclick="switchTab('decoder')" id="nav-decoder" class="flex items-center space-x-3 px-3 py-2.5 rounded-lg transition hover:bg-slate-700 hover:text-white">
+                    <i class="fa-solid fa-barcode text-green-400 w-5"></i>
+                    <span>Decoder PN</span>
+                </a>
+                <a href="#" onclick="switchTab('catalog')" id="nav-catalog" class="flex items-center space-x-3 px-3 py-2.5 rounded-lg transition hover:bg-slate-700 hover:text-white">
+                    <i class="fa-solid fa-book text-amber-400 w-5"></i>
+                    <span>Katalog Master</span>
+                </a>
+                <div id="adminNavSection" class="pt-4 border-t border-slate-700 mt-4">
+                    <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 px-3">Admin Panel</div>
+                    <a href="#" onclick="switchTab('masterdata')" id="nav-masterdata" class="flex items-center space-x-3 px-3 py-2.5 rounded-lg transition hover:bg-slate-700 hover:text-white">
+                        <i class="fa-solid fa-database text-purple-400 w-5"></i>
+                        <span>Kelola Master Data</span>
+                    </a>
+                </div>
+            </nav>
+            <div class="p-4 border-t border-slate-700 text-xs text-slate-400 text-center">
+                Cloud Sheets • v8.0
+            </div>
+        </aside>
+
+        <!-- MAIN CONTENT AREA -->
+        <main class="flex-1 p-6 overflow-y-auto">
+            
+            <!-- LOGIN PANEL -->
+            <div id="loginView" class="max-w-md mx-auto my-12 bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden">
+                <div class="bg-slate-900 text-white p-6 text-center">
+                    <i class="fa-solid fa-lock text-4xl text-blue-400 mb-2"></i>
+                    <h2 class="text-xl font-bold">Masuk ke Sistem</h2>
+                    <p class="text-xs text-slate-400 mt-1">Gunakan akun admin atau user untuk melanjutkan</p>
+                </div>
+                <form onsubmit="handleLogin(event)" class="p-6 space-y-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Username</label>
+                        <input type="text" id="loginUsername" required class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="admin / user">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Password</label>
+                        <input type="password" id="loginPassword" required class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="••••••••">
+                    </div>
+                    <div id="loginError" class="text-xs text-red-600 bg-red-50 p-2 rounded hidden"></div>
+                    <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded-lg text-sm transition">
+                        Log In
+                    </button>
+                    <div class="text-xs text-slate-500 text-center border-t border-slate-100 pt-3">
+                        Default login: <br>
+                        Admin: <span class="font-mono text-slate-700">admin / admin</span> | User: <span class="font-mono text-slate-700">user / user</span>
+                    </div>
+                </form>
+            </div>
+
+            <!-- APP CONTENT -->
+            <div id="appViews" class="hidden">
+
+                <!-- 1. TAB GENERATOR -->
+                <section id="view-generator" class="space-y-6">
+                    <div class="flex justify-between items-center border-b pb-3">
+                        <div>
+                            <h2 class="text-xl font-bold text-slate-800">Generator Part Number</h2>
+                            <p class="text-xs text-slate-500">Pilih kategori dan lengkapi spesifikasi untuk membentuk Part Number 20-digit</p>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <!-- Step 1: Kategori & Form Generator -->
+                        <div class="lg:col-span-2 bg-white p-5 rounded-xl shadow-sm border border-slate-200 space-y-4">
+                            <div>
+                                <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Pilih Kategori Produk</label>
+                                <select id="genCategorySelect" onchange="renderGeneratorForm()" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-semibold">
+                                    <option value="">-- Pilih Kategori --</option>
+                                </select>
+                            </div>
+
+                            <div id="dynamicSegContainer" class="space-y-4 border-t border-slate-100 pt-4">
+                                <div class="text-xs text-slate-400 italic">Silakan pilih kategori terlebih dahulu.</div>
+                            </div>
+                        </div>
+
+                        <!-- Step 2: Output & Detail Informasi Katalog -->
+                        <div class="bg-slate-900 text-white p-5 rounded-xl shadow-md flex flex-col justify-between space-y-4">
+                            <div class="space-y-4">
+                                <h3 class="text-sm font-bold text-blue-400 uppercase tracking-wider border-b border-slate-700 pb-2">Hasil Formasi Part Number</h3>
+                                
+                                <div>
+                                    <label class="text-xs text-slate-400 block mb-1">Generated Part Number (20-Digit Limit):</label>
+                                    <div id="genPnDisplay" class="font-mono text-xl font-bold bg-slate-800 p-3 rounded-lg border border-slate-700 text-green-400 break-all text-center tracking-wider">
+                                        --------------------
+                                    </div>
+                                    <div id="genPnLength" class="text-right text-[10px] text-slate-400 mt-1">0 / 20 Karakter</div>
+                                </div>
+
+                                <div>
+                                    <label class="text-xs text-slate-400 block mb-1">Deskripsi Terbentuk:</label>
+                                    <div id="genDescDisplay" class="text-sm bg-slate-800 p-3 rounded-lg border border-slate-700 text-slate-200 min-h-[60px] italic">
+                                        Deskripsi akan otomatis tersusun...
+                                    </div>
+                                </div>
+
+                                <!-- Additional Details for Cataloging -->
+                                <div class="border-t border-slate-800 pt-3 space-y-3">
+                                    <h4 class="text-xs font-bold text-slate-300">Informasi Katalog Tambahan</h4>
+                                    <div>
+                                        <label class="block text-[11px] text-slate-400 mb-1">Kode / Nama Proyek</label>
+                                        <input type="text" id="catProject" placeholder="Contoh: PRJ-2026-X" class="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500">
+                                    </div>
+                                    <div class="grid grid-cols-2 gap-2">
+                                        <div>
+                                            <label class="block text-[11px] text-slate-400 mb-1">Jumlah Stok</label>
+                                            <input type="number" id="catStock" value="1" min="0" class="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500">
+                                        </div>
+                                        <div>
+                                            <label class="block text-[11px] text-slate-400 mb-1">Lokasi Penyimpanan</label>
+                                            <input type="text" id="catLocation" placeholder="Rak A1-02" class="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500">
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label class="block text-[11px] text-slate-400 mb-1">Tanggal (Kosongkan untuk Hari Ini)</label>
+                                        <input type="date" id="catDate" class="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <button onclick="saveToCatalog()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 rounded-lg text-sm transition shadow flex items-center justify-center gap-2">
+                                <i class="fa-solid fa-cloud-arrow-up"></i> Simpan ke Google Sheets
+                            </button>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 2. TAB DECODER -->
+                <section id="view-decoder" class="space-y-6 hidden">
+                    <div class="border-b pb-3">
+                        <h2 class="text-xl font-bold text-slate-800">Decoder Part Number</h2>
+                        <p class="text-xs text-slate-500">Masukkan Part Number untuk mengurai struktur digit, kategori, dan deskripsi produk secara otomatis</p>
+                    </div>
+
+                    <div class="max-w-2xl mx-auto bg-white p-6 rounded-xl shadow-sm border border-slate-200 space-y-4">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Masukkan Part Number (Max 20 Karakter)</label>
+                            <div class="flex gap-2">
+                                <input type="text" id="decoderInput" maxlength="20" placeholder="Contoh: CTRA013000100PVC0000" oninput="this.value = this.value.toUpperCase()" class="flex-1 font-mono uppercase px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500">
+                                <button onclick="decodePartNumber()" class="bg-green-600 hover:bg-green-700 text-white font-bold px-5 py-2 rounded-lg text-sm transition flex items-center gap-2">
+                                    <i class="fa-solid fa-magnifying-glass"></i> Decode
+                                </button>
+                            </div>
+                        </div>
+
+                        <div id="decoderResult" class="hidden space-y-4 border-t pt-4">
+                            <div id="decoderStatus" class="p-3 rounded-lg text-sm font-semibold flex items-center gap-2"></div>
+
+                            <div class="space-y-2">
+                                <div class="text-xs font-bold text-slate-500 uppercase">Kategori Terdeteksi:</div>
+                                <div id="decoderCategory" class="text-base font-bold text-slate-800"></div>
+                            </div>
+
+                            <div class="space-y-2">
+                                <div class="text-xs font-bold text-slate-500 uppercase">Rincian Segmentasi Digit:</div>
+                                <div class="overflow-x-auto">
+                                    <table class="w-full text-xs text-left border-collapse">
+                                        <thead>
+                                            <tr class="bg-slate-100 text-slate-600 border-b">
+                                                <th class="p-2">Segmen</th>
+                                                <th class="p-2">Panjang Digit</th>
+                                                <th class="p-2">Nilai Digit</th>
+                                                <th class="p-2">Arti / Keterangan</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="decoderTableBody"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <div class="space-y-1 bg-slate-50 p-3 rounded-lg border border-slate-200">
+                                <div class="text-xs font-bold text-slate-500 uppercase">Hasil Deskripsi Lengkap:</div>
+                                <div id="decoderFullDesc" class="text-sm font-medium text-slate-800"></div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 3. TAB KATALOG MASTER -->
+                <section id="view-catalog" class="space-y-6 hidden">
+                    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b pb-3">
+                        <div>
+                            <h2 class="text-xl font-bold text-slate-800">Katalog History Part Number</h2>
+                            <p class="text-xs text-slate-500">Daftar part number terdaftar di Google Sheets Database</p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <input type="text" id="catalogSearch" oninput="renderCatalogTable()" placeholder="Cari Part Number / Proyek..." class="px-3 py-1.5 border border-slate-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <button onclick="fetchCatalogFromCloud()" class="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1.5 rounded-lg transition flex items-center gap-1">
+                                <i class="fa-solid fa-rotate"></i> Refresh
+                            </button>
+                            <button onclick="exportCatalogCSV()" class="bg-slate-700 hover:bg-slate-800 text-white text-xs px-3 py-1.5 rounded-lg transition flex items-center gap-1">
+                                <i class="fa-solid fa-file-csv"></i> Export CSV
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-xs text-left border-collapse">
+                                <thead>
+                                    <tr class="bg-slate-800 text-white border-b">
+                                        <th class="p-3">Part Number</th>
+                                        <th class="p-3">Kategori</th>
+                                        <th class="p-3">Deskripsi Produk</th>
+                                        <th class="p-3">Proyek</th>
+                                        <th class="p-3">Stok</th>
+                                        <th class="p-3">Lokasi</th>
+                                        <th class="p-3">Tanggal</th>
+                                        <th class="p-3 text-center">Aksi</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="catalogTableBody" class="divide-y divide-slate-100">
+                                    <!-- Dynamic content -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 4. TAB KELOLA MASTER DATA (ADMIN ONLY) -->
+                <section id="view-masterdata" class="space-y-6 hidden">
+                    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b pb-3">
+                        <div>
+                            <h2 class="text-xl font-bold text-slate-800">Pengelolaan Master Data (Admin)</h2>
+                            <p class="text-xs text-slate-500">Atur kategori, format digit, opsi segmen, dan simpan langsung ke Google Sheets</p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button onclick="saveAllMasterToCloud()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition flex items-center gap-1">
+                                <i class="fa-solid fa-cloud-arrow-up"></i> Simpan ke Sheets
+                            </button>
+                            <button onclick="createNewCategory()" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition flex items-center gap-1">
+                                <i class="fa-solid fa-plus"></i> Kategori Baru
+                            </button>
+                            <button onclick="exportMasterDataJSON()" class="bg-slate-700 hover:bg-slate-800 text-white text-xs px-3 py-1.5 rounded-lg transition flex items-center gap-1">
+                                <i class="fa-solid fa-download"></i> Export JSON
+                            </button>
+                            <label class="bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition flex items-center gap-1 cursor-pointer">
+                                <i class="fa-solid fa-upload"></i> Import JSON
+                                <input type="file" id="importJsonInput" accept=".json" onchange="importMasterDataJSON(event)" class="hidden">
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                        <!-- Sidebar List Kategori -->
+                        <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-3">
+                            <div class="text-xs font-bold text-slate-600 uppercase border-b pb-2">Daftar Kategori</div>
+                            <div id="masterCatList" class="space-y-1">
+                                <!-- Dynamic List -->
+                            </div>
+                        </div>
+
+                        <!-- Main Config Panel for Selected Category -->
+                        <div class="lg:col-span-3 bg-white p-6 rounded-xl shadow-sm border border-slate-200 space-y-6" id="masterEditorPanel">
+                            <div class="text-center py-8 text-slate-400 italic">Silakan pilih kategori di sebelah kiri untuk diedit.</div>
+                        </div>
+                    </div>
+                </section>
+
+            </div>
+        </main>
+    </div>
+
+    <!-- MODAL EDIT CATALOG ITEM -->
+    <div id="editCatalogModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center hidden z-50">
+        <div class="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-lg p-6 space-y-4">
+            <div class="flex justify-between items-center border-b pb-2">
+                <h3 class="font-bold text-slate-800">Edit Data Katalog</h3>
+                <button onclick="closeEditCatalogModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <input type="hidden" id="editCatId">
+            <div class="space-y-3 text-xs">
+                <div>
+                    <label class="block font-bold text-slate-600 mb-1">Part Number</label>
+                    <input type="text" id="editCatPn" readonly class="w-full bg-slate-100 border border-slate-300 rounded px-3 py-2 font-mono uppercase">
+                </div>
+                <div>
+                    <label class="block font-bold text-slate-600 mb-1">Deskripsi Produk</label>
+                    <textarea id="editCatDesc" rows="2" class="w-full border border-slate-300 rounded px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none"></textarea>
+                </div>
+                <div>
+                    <label class="block font-bold text-slate-600 mb-1">Kode / Nama Proyek</label>
+                    <input type="text" id="editCatProject" class="w-full border border-slate-300 rounded px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none">
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block font-bold text-slate-600 mb-1">Stok</label>
+                        <input type="number" id="editCatStock" min="0" class="w-full border border-slate-300 rounded px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block font-bold text-slate-600 mb-1">Lokasi</label>
+                        <input type="text" id="editCatLocation" class="w-full border border-slate-300 rounded px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                </div>
+                <div>
+                    <label class="block font-bold text-slate-600 mb-1">Tanggal</label>
+                    <input type="date" id="editCatDate" class="w-full border border-slate-300 rounded px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none">
+                </div>
+            </div>
+            <div class="flex justify-end gap-2 border-t pt-3">
+                <button onclick="closeEditCatalogModal()" class="px-4 py-2 bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg hover:bg-slate-300">Batal</button>
+                <button onclick="saveCatalogEdit()" class="px-4 py-2 bg-blue-600 text-white text-xs font-semibold rounded-lg hover:bg-blue-700">Simpan Perubahan</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- JAVASCRIPT LOGIC -->
+    <script>
+        // --- API CONFIGURATION ---
+        const API_URL = "https://script.google.com/macros/s/AKfycbx703whikJ_11c1MIMvVhDHMMq-I5kZj9yWjoLbpusqHeJhTkrBoaj3kltVgFWgGAI/exec";
+
+        // --- DEFAULT MASTER DATA (FALLBACK) ---
+        const DEFAULT_MASTER_DATA = [
+            {
+                id: "cat_cable_tray",
+                prefix: "CTRA",
+                name: "Cable Tray",
+                descTemplate: "{Type}, Length : {Length}mm, Width : {Width}mm, Material : {Material}, Finish : {Finish}",
+                descRules: [],
+                segments: [
+                    { id: "s1", name: "Prefix", length: 4, allowCustom: false, options: [{code: "CTRA", label: "CTRA (Cable Tray)", desc: "Cable Tray", showInDesc: true}] },
+                    { id: "s2", name: "Type", length: 2, allowCustom: false, options: [{code: "01", label: "Straight Tray", desc: "Straight Cable Tray", showInDesc: true}, {code: "02", label: "Elbow 90 Deg", desc: "Elbow 90 Degree Tray", showInDesc: true}, {code: "03", label: "Tee Joint", desc: "Tee Joint Tray", showInDesc: true}] },
+                    { id: "s3", name: "Length", length: 4, allowCustom: true, options: [{code: "3000", label: "3000mm", desc: "3000", showInDesc: true}, {code: "2000", label: "2000mm", desc: "2000", showInDesc: true}] },
+                    { id: "s4", name: "Width", length: 3, allowCustom: true, options: [{code: "100", label: "100mm", desc: "100", showInDesc: true}, {code: "200", label: "200mm", desc: "200", showInDesc: true}, {code: "300", label: "300mm", desc: "300", showInDesc: true}] },
+                    { id: "s5", name: "Material", length: 3, allowCustom: false, options: [{code: "PVC", label: "PVC Plastic", desc: "PVC", showInDesc: true}, {code: "ST3", label: "Steel SS316", desc: "SS316", showInDesc: true}, {code: "ALU", label: "Aluminum", desc: "Aluminum", showInDesc: true}] },
+                    { id: "s6", name: "Finish", length: 4, allowCustom: false, options: [{code: "0000", label: "Standard / Plain", desc: "STANDARD", showInDesc: false}, {code: "GALV", label: "Galvanized", desc: "Hot Dip Galvanized", showInDesc: true}] }
+                ],
+                conditionalRules: { "01": ["3000", "2000"], "02": ["2000"] }
+            }
+        ];
+
+        // --- GLOBAL STATE ---
+        let currentUser = null;
+        let masterData = [];
+        let catalogData = [];
+        let activeTab = 'generator';
+        let selectedMasterCatId = null;
+
+        // --- UTILITY LOADER ---
+        function showLoader(text = "Loading...") {
+            document.getElementById('loaderText').textContent = text;
+            document.getElementById('globalLoader').classList.remove('hidden');
+        }
+
+        function hideLoader() {
+            document.getElementById('globalLoader').classList.add('hidden');
+        }
+
+        // --- API SERVICES (GOOGLE SHEETS) ---
+        async function fetchMasterFromCloud() {
+            showLoader("Mengambil Master Data dari Google Sheets...");
+            try {
+                const res = await fetch(`${API_URL}?action=getMasterData`);
+                const data = await res.json();
+                if (Array.isArray(data) && data.length > 0) {
+                    masterData = data;
+                } else {
+                    masterData = DEFAULT_MASTER_DATA;
+                }
+            } catch (err) {
+                console.error("Gagal load Master Data:", err);
+                masterData = DEFAULT_MASTER_DATA;
+            } finally {
+                hideLoader();
+                initCategoryDropdowns();
+                if (activeTab === 'masterdata') renderMasterDataPanel();
+            }
+        }
+
+        async function fetchCatalogFromCloud() {
+            showLoader("Mengambil Katalog dari Google Sheets...");
+            try {
+                const res = await fetch(`${API_URL}?action=getCatalogData`);
+                const data = await res.json();
+                if (Array.isArray(data)) {
+                    catalogData = data;
+                }
+            } catch (err) {
+                console.error("Gagal load Katalog:", err);
+            } finally {
+                hideLoader();
+                if (activeTab === 'catalog') renderCatalogTable();
+            }
+        }
+
+        async function saveAllMasterToCloud() {
+            showLoader("Menyimpan Master Data ke Google Sheets...");
+            try {
+                const res = await fetch(API_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ action: "saveMasterData", data: masterData })
+                });
+                const result = await res.json();
+                alert(result.message || "Master Data berhasil disimpan!");
+            } catch (err) {
+                alert("Gagal menyimpan Master Data: " + err.message);
+            } finally {
+                hideLoader();
+            }
+        }
+
+        // --- AUTHENTICATION ---
+        function handleLogin(e) {
+            e.preventDefault();
+            const u = document.getElementById('loginUsername').value.trim().toLowerCase();
+            const p = document.getElementById('loginPassword').value.trim().toLowerCase();
+            const errDiv = document.getElementById('loginError');
+
+            if (u === 'admin' && p === 'admin') {
+                currentUser = { name: 'Administrator', role: 'admin' };
+            } else if (u === 'user' && p === 'user') {
+                currentUser = { name: 'Standard User', role: 'user' };
+            } else {
+                errDiv.textContent = 'Username atau password salah!';
+                errDiv.classList.remove('hidden');
+                return;
+            }
+
+            errDiv.classList.add('hidden');
+            setupUserUI();
+        }
+
+        function handleLogout() {
+            currentUser = null;
+            document.getElementById('loginView').classList.remove('hidden');
+            document.getElementById('appViews').classList.add('hidden');
+            document.getElementById('userInfo').classList.add('hidden');
+            document.getElementById('logoutBtn').classList.add('hidden');
+        }
+
+        function setupUserUI() {
+            document.getElementById('loginView').classList.add('hidden');
+            document.getElementById('appViews').classList.remove('hidden');
+            document.getElementById('userInfo').classList.remove('hidden');
+            document.getElementById('logoutBtn').classList.remove('hidden');
+
+            document.getElementById('userName').textContent = currentUser.name;
+            document.getElementById('userRole').textContent = currentUser.role;
+
+            const adminNav = document.getElementById('adminNavSection');
+            if (currentUser.role === 'admin') {
+                adminNav.classList.remove('hidden');
+            } else {
+                adminNav.classList.add('hidden');
+            }
+
+            // Load Initial Data from Google Sheets
+            fetchMasterFromCloud();
+            switchTab('generator');
+        }
+
+        // --- NAVIGATION TABS ---
+        function switchTab(tabId) {
+            if (currentUser.role !== 'admin' && tabId === 'masterdata') {
+                alert('Akses ditolak. Hanya Admin yang dapat mengakses Kelola Master Data.');
+                return;
+            }
+
+            activeTab = tabId;
+            ['generator', 'decoder', 'catalog', 'masterdata'].forEach(t => {
+                const view = document.getElementById(`view-${t}`);
+                const nav = document.getElementById(`nav-${t}`);
+                if (t === tabId) {
+                    view?.classList.remove('hidden');
+                    if (nav) {
+                        nav.classList.add('sidebar-active', 'text-white');
+                        nav.classList.remove('hover:bg-slate-700');
+                    }
+                } else {
+                    view?.classList.add('hidden');
+                    if (nav) {
+                        nav.classList.remove('sidebar-active', 'text-white');
+                        nav.classList.add('hover:bg-slate-700');
+                    }
+                }
+            });
+
+            if (tabId === 'catalog') fetchCatalogFromCloud();
+            if (tabId === 'masterdata') renderMasterDataPanel();
+        }
+
+        // --- HELPER RESOLVE DYNAMIC TEMPLATE ---
+        function resolveDescTemplate(category, selectedCodeMap) {
+            if (category.descRules && category.descRules.length > 0) {
+                for (let rule of category.descRules) {
+                    if (selectedCodeMap[rule.segmentId] && selectedCodeMap[rule.segmentId].toUpperCase() === rule.triggerCode.toUpperCase()) {
+                        return rule.template;
+                    }
+                }
+            }
+            return category.descTemplate;
+        }
+
+        function cleanDescriptionString(str) {
+            return str
+                .replace(/,\s*,/g, ',')
+                .replace(/,\s*$/g, '')
+                .replace(/^\s*,\s*/g, '')
+                .replace(/\s+/g, ' ')
+                .trim();
+        }
+
+        // --- 1. GENERATOR LOGIC ---
+        function initCategoryDropdowns() {
+            const select = document.getElementById('genCategorySelect');
+            select.innerHTML = '<option value="">-- Pilih Kategori --</option>';
+            masterData.forEach(cat => {
+                const opt = document.createElement('option');
+                opt.value = cat.id;
+                opt.textContent = `[${cat.prefix}] ${cat.name}`;
+                select.appendChild(opt);
+            });
+        }
+
+        function renderGeneratorForm() {
+            const catId = document.getElementById('genCategorySelect').value;
+            const container = document.getElementById('dynamicSegContainer');
+            container.innerHTML = '';
+
+            if (!catId) {
+                container.innerHTML = '<div class="text-xs text-slate-400 italic">Silakan pilih kategori terlebih dahulu.</div>';
+                updateGeneratedPnDisplay();
+                return;
+            }
+
+            const category = masterData.find(c => c.id === catId);
+            if (!category) return;
+
+            category.segments.forEach((seg, idx) => {
+                const segDiv = document.createElement('div');
+                segDiv.className = "p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-2";
+                
+                const labelHead = document.createElement('div');
+                labelHead.className = "flex justify-between items-center";
+                labelHead.innerHTML = `
+                    <span class="text-xs font-bold text-slate-700">${idx + 1}. ${seg.name} <span class="text-slate-400 font-normal">(${seg.length} digit)</span></span>
+                    ${seg.allowCustom ? '<span class="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-semibold">Bisa Custom Input</span>' : ''}
+                `;
+                segDiv.appendChild(labelHead);
+
+                const select = document.createElement('select');
+                select.id = `gen_seg_${seg.id}`;
+                select.className = "gen-segment-input w-full px-3 py-1.5 border border-slate-300 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono";
+                select.setAttribute('data-seg-idx', idx);
+                select.onchange = () => handleSegmentChange(catId, idx);
+
+                segDiv.appendChild(select);
+
+                if (seg.allowCustom) {
+                    const customInput = document.createElement('input');
+                    customInput.type = "text";
+                    customInput.id = `gen_custom_${seg.id}`;
+                    customInput.maxLength = seg.length;
+                    customInput.placeholder = `Atau ketik custom (${seg.length} karakter)...`;
+                    customInput.className = "hidden w-full mt-2 px-3 py-1.5 border border-blue-300 rounded text-xs font-mono uppercase bg-blue-50/50 focus:outline-none focus:ring-2 focus:ring-blue-500";
+                    customInput.oninput = (e) => {
+                        e.target.value = e.target.value.toUpperCase();
+                        updateGeneratedPnDisplay();
+                    };
+                    segDiv.appendChild(customInput);
+                }
+
+                container.appendChild(segDiv);
+            });
+
+            populateSegmentOptions(catId, 0);
+        }
+
+        function populateSegmentOptions(catId, segIndex) {
+            const category = masterData.find(c => c.id === catId);
+            if (!category || segIndex >= category.segments.length) return;
+
+            const seg = category.segments[segIndex];
+            const select = document.getElementById(`gen_seg_${seg.id}`);
+            if (!select) return;
+
+            let allowedCodes = null;
+            if (segIndex > 0) {
+                for (let pIdx = 0; pIdx < segIndex; pIdx++) {
+                    const parentSeg = category.segments[pIdx];
+                    const parentSelect = document.getElementById(`gen_seg_${parentSeg.id}`);
+                    const parentVal = parentSelect ? parentSelect.value : null;
+
+                    if (parentVal && category.conditionalRules && category.conditionalRules[parentVal]) {
+                        const rules = category.conditionalRules[parentVal];
+                        if (rules && rules.length > 0) {
+                            if (allowedCodes === null) {
+                                allowedCodes = [...rules];
+                            } else {
+                                allowedCodes = allowedCodes.filter(c => rules.includes(c));
+                            }
+                        }
+                    }
+                }
+            }
+
+            select.innerHTML = '<option value="">-- Pilih --</option>';
+            seg.options.forEach(opt => {
+                const upperCode = opt.code ? opt.code.toUpperCase() : "";
+                if (allowedCodes !== null && !allowedCodes.includes(upperCode)) return;
+
+                const o = document.createElement('option');
+                o.value = upperCode;
+                o.textContent = `[${upperCode}] ${opt.label}`;
+                select.appendChild(o);
+            });
+
+            if (seg.allowCustom) {
+                const oCustom = document.createElement('option');
+                oCustom.value = "__CUSTOM__";
+                oCustom.textContent = "-- ISI CUSTOM VALUE --";
+                select.appendChild(oCustom);
+            }
+
+            if (select.options.length > 1) {
+                select.selectedIndex = 1;
+            }
+
+            handleSegmentChange(catId, segIndex);
+        }
+
+        function handleSegmentChange(catId, segIndex) {
+            const category = masterData.find(c => c.id === catId);
+            if (!category) return;
+
+            const seg = category.segments[segIndex];
+            const select = document.getElementById(`gen_seg_${seg.id}`);
+            const customInput = document.getElementById(`gen_custom_${seg.id}`);
+
+            if (seg.allowCustom && customInput) {
+                if (select.value === "__CUSTOM__") {
+                    customInput.classList.remove('hidden');
+                } else {
+                    customInput.classList.add('hidden');
+                    customInput.value = '';
+                }
+            }
+
+            if (segIndex + 1 < category.segments.length) {
+                populateSegmentOptions(catId, segIndex + 1);
+            } else {
+                updateGeneratedPnDisplay();
+            }
+        }
+
+        function updateGeneratedPnDisplay() {
+            const catId = document.getElementById('genCategorySelect').value;
+            const pnDisplay = document.getElementById('genPnDisplay');
+            const pnLength = document.getElementById('genPnLength');
+            const descDisplay = document.getElementById('genDescDisplay');
+
+            if (!catId) {
+                pnDisplay.textContent = "--------------------";
+                pnLength.textContent = "0 / 20 Karakter";
+                descDisplay.textContent = "Deskripsi akan otomatis tersusun...";
+                return;
+            }
+
+            const category = masterData.find(c => c.id === catId);
+            let rawPn = "";
+            let descValues = {};
+            let selectedCodeMap = {};
+
+            category.segments.forEach(seg => {
+                const select = document.getElementById(`gen_seg_${seg.id}`);
+                const customInput = document.getElementById(`gen_custom_${seg.id}`);
+
+                let codeVal = "";
+                let labelVal = "";
+
+                if (select) {
+                    if (select.value === "__CUSTOM__" && customInput) {
+                        codeVal = customInput.value.toUpperCase().padStart(seg.length, '0').slice(0, seg.length);
+                        labelVal = customInput.value.toUpperCase();
+                        selectedCodeMap[seg.id] = codeVal;
+                    } else if (select.value) {
+                        codeVal = select.value.toUpperCase();
+                        selectedCodeMap[seg.id] = codeVal;
+                        const matchedOpt = seg.options.find(o => o.code.toUpperCase() === select.value.toUpperCase());
+                        
+                        if (matchedOpt && matchedOpt.showInDesc === false) {
+                            labelVal = ""; 
+                        } else {
+                            labelVal = matchedOpt ? (matchedOpt.desc || matchedOpt.label) : select.value;
+                        }
+                    } else {
+                        codeVal = "-".repeat(seg.length);
+                        labelVal = "...";
+                        selectedCodeMap[seg.id] = "";
+                    }
+                }
+
+                rawPn += codeVal;
+                descValues[seg.name] = labelVal;
+            });
+
+            const finalPn = rawPn.slice(0, 20).toUpperCase();
+            pnDisplay.textContent = finalPn;
+            pnLength.textContent = `${finalPn.length} / 20 Karakter`;
+
+            let activeTemplate = resolveDescTemplate(category, selectedCodeMap);
+            let descStr = activeTemplate;
+            Object.keys(descValues).forEach(key => {
+                descStr = descStr.replace(new RegExp(`\\{${key}\\}`, 'g'), descValues[key]);
+            });
+
+            descDisplay.textContent = cleanDescriptionString(descStr);
+        }
+
+        // --- SAVE TO CATALOG (SHEETS) ---
+        async function saveToCatalog() {
+            const catId = document.getElementById('genCategorySelect').value;
+            if (!catId) {
+                alert('Pilih kategori terlebih dahulu!');
+                return;
+            }
+
+            const category = masterData.find(c => c.id === catId);
+            const pn = document.getElementById('genPnDisplay').textContent.trim().toUpperCase();
+            const desc = document.getElementById('genDescDisplay').textContent.trim();
+            
+            if (pn.includes('-')) {
+                alert('Harap lengkapi semua segmen spesifikasi part number!');
+                return;
+            }
+
+            const proj = document.getElementById('catProject').value.trim() || 'GENERAL';
+            const stock = parseInt(document.getElementById('catStock').value) || 0;
+            const loc = document.getElementById('catLocation').value.trim() || 'GUDANG-1';
+            const dateInput = document.getElementById('catDate').value;
+            const finalDate = dateInput ? dateInput : new Date().toISOString().split('T')[0];
+
+            const newItem = {
+                id: "item_" + Date.now(),
+                pn: pn,
+                categoryName: category.name,
+                description: desc,
+                project: proj,
+                stock: stock,
+                location: loc,
+                date: finalDate
+            };
+
+            showLoader("Menyimpan Item Baru ke Google Sheets...");
+            try {
+                const res = await fetch(API_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ action: "addCatalogItem", data: newItem })
+                });
+                const result = await res.json();
+                alert(result.message || "Part Number berhasil disimpan!");
+                switchTab('catalog');
+            } catch (err) {
+                alert("Gagal menyimpan ke katalog: " + err.message);
+            } finally {
+                hideLoader();
+            }
+        }
+
+        // --- 2. DECODER LOGIC ---
+        function decodePartNumber() {
+            const inputPn = document.getElementById('decoderInput').value.trim().toUpperCase();
+            const resultBox = document.getElementById('decoderResult');
+            const statusDiv = document.getElementById('decoderStatus');
+            const catDiv = document.getElementById('decoderCategory');
+            const tableBody = document.getElementById('decoderTableBody');
+            const fullDescDiv = document.getElementById('decoderFullDesc');
+
+            if (!inputPn) {
+                alert('Masukkan Part Number terlebih dahulu.');
+                return;
+            }
+
+            resultBox.classList.remove('hidden');
+
+            const prefix = inputPn.slice(0, 4);
+            const matchedCat = masterData.find(c => c.prefix.toUpperCase() === prefix);
+
+            if (!matchedCat) {
+                statusDiv.className = "p-3 rounded-lg text-sm font-semibold bg-red-100 text-red-700 flex items-center gap-2";
+                statusDiv.innerHTML = `<i class="fa-solid fa-circle-xmark"></i> Kategori tidak ditemukan untuk prefix "${prefix}"`;
+                catDiv.textContent = "-";
+                tableBody.innerHTML = "";
+                fullDescDiv.textContent = "-";
+                return;
+            }
+
+            statusDiv.className = "p-3 rounded-lg text-sm font-semibold bg-emerald-100 text-emerald-800 flex items-center gap-2";
+            statusDiv.innerHTML = `<i class="fa-solid fa-circle-check"></i> Part Number Valid Terdeko (Prefix: ${prefix})`;
+            catDiv.textContent = matchedCat.name;
+
+            let currIdx = 0;
+            let descValues = {};
+            let selectedCodeMap = {};
+            tableBody.innerHTML = "";
+
+            matchedCat.segments.forEach(seg => {
+                const segCode = inputPn.slice(currIdx, currIdx + seg.length).toUpperCase();
+                currIdx += seg.length;
+                selectedCodeMap[seg.id] = segCode;
+
+                let optLabel = "Custom / Non-Standard Value";
+                let optDesc = segCode;
+                const matchedOpt = seg.options.find(o => o.code.toUpperCase() === segCode);
+                
+                if (matchedOpt) {
+                    optLabel = matchedOpt.label;
+                    if (matchedOpt.showInDesc === false) {
+                        optDesc = ""; 
+                    } else {
+                        optDesc = matchedOpt.desc || matchedOpt.label;
+                    }
+                }
+
+                descValues[seg.name] = segCode ? optDesc : "...";
+
+                const tr = document.createElement('tr');
+                tr.className = "border-b hover:bg-slate-50";
+                tr.innerHTML = `
+                    <td class="p-2 font-semibold text-slate-700">${seg.name}</td>
+                    <td class="p-2 text-slate-500 font-mono">${seg.length} digit</td>
+                    <td class="p-2 font-mono font-bold text-blue-600">${segCode || '-'}</td>
+                    <td class="p-2 text-slate-700">${segCode ? optLabel : '<span class="text-red-400">Digit Kurang</span>'}</td>
+                `;
+                tableBody.appendChild(tr);
+            });
+
+            let activeTemplate = resolveDescTemplate(matchedCat, selectedCodeMap);
+            let descStr = activeTemplate;
+            Object.keys(descValues).forEach(key => {
+                descStr = descStr.replace(new RegExp(`\\{${key}\\}`, 'g'), descValues[key]);
+            });
+            fullDescDiv.textContent = cleanDescriptionString(descStr);
+        }
+
+        // --- 3. CATALOG HISTORY LOGIC ---
+        function renderCatalogTable() {
+            const tbody = document.getElementById('catalogTableBody');
+            const search = document.getElementById('catalogSearch').value.toLowerCase();
+            tbody.innerHTML = '';
+
+            const filtered = catalogData.filter(item => 
+                (item.pn && item.pn.toLowerCase().includes(search)) || 
+                (item.description && item.description.toLowerCase().includes(search)) ||
+                (item.project && item.project.toLowerCase().includes(search))
+            );
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="8" class="p-4 text-center text-slate-400 italic">Belum ada data katalog.</td></tr>`;
+                return;
+            }
+
+            filtered.forEach(item => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50 border-b";
+                tr.innerHTML = `
+                    <td class="p-3 font-mono font-bold text-blue-600 uppercase">${item.pn}</td>
+                    <td class="p-3 font-semibold text-slate-700">${item.categoryName}</td>
+                    <td class="p-3 text-slate-600">${item.description}</td>
+                    <td class="p-3 text-slate-500">${item.project}</td>
+                    <td class="p-3 font-semibold text-slate-700">${item.stock}</td>
+                    <td class="p-3 text-slate-500">${item.location}</td>
+                    <td class="p-3 text-slate-400 font-mono text-[11px]">${item.date}</td>
+                    <td class="p-3 text-center space-x-1">
+                        <button onclick="openEditCatalogModal('${item.id}')" class="p-1 text-blue-600 hover:text-blue-800" title="Edit"><i class="fa-solid fa-pen-to-square"></i></button>
+                        <button onclick="deleteCatalogItem('${item.id}')" class="p-1 text-red-600 hover:text-red-800" title="Hapus"><i class="fa-solid fa-trash-can"></i></button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function openEditCatalogModal(id) {
+            const item = catalogData.find(i => i.id === id);
+            if (!item) return;
+
+            document.getElementById('editCatId').value = item.id;
+            document.getElementById('editCatPn').value = item.pn.toUpperCase();
+            document.getElementById('editCatDesc').value = item.description;
+            document.getElementById('editCatProject').value = item.project;
+            document.getElementById('editCatStock').value = item.stock;
+            document.getElementById('editCatLocation').value = item.location;
+            document.getElementById('editCatDate').value = item.date;
+
+            document.getElementById('editCatalogModal').classList.remove('hidden');
+        }
+
+        function closeEditCatalogModal() {
+            document.getElementById('editCatalogModal').classList.add('hidden');
+        }
+
+        async function saveCatalogEdit() {
+            const id = document.getElementById('editCatId').value;
+            const updatedData = {
+                id: id,
+                description: document.getElementById('editCatDesc').value,
+                project: document.getElementById('editCatProject').value,
+                stock: parseInt(document.getElementById('editCatStock').value) || 0,
+                location: document.getElementById('editCatLocation').value,
+                date: document.getElementById('editCatDate').value
+            };
+
+            showLoader("Memperbarui Katalog di Google Sheets...");
+            try {
+                const res = await fetch(API_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ action: "updateCatalogItem", data: updatedData })
+                });
+                const result = await res.json();
+                alert(result.message || "Data berhasil diperbarui!");
+                closeEditCatalogModal();
+                fetchCatalogFromCloud();
+            } catch (err) {
+                alert("Gagal mengupdate item: " + err.message);
+            } finally {
+                hideLoader();
+            }
+        }
+
+        async function deleteCatalogItem(id) {
+            if (confirm('Apakah Anda yakin ingin menghapus part number ini dari Google Sheets?')) {
+                showLoader("Menghapus Item dari Google Sheets...");
+                try {
+                    const res = await fetch(API_URL, {
+                        method: 'POST',
+                        body: JSON.stringify({ action: "deleteCatalogItem", id: id })
+                    });
+                    const result = await res.json();
+                    alert(result.message || "Item berhasil dihapus!");
+                    fetchCatalogFromCloud();
+                } catch (err) {
+                    alert("Gagal menghapus item: " + err.message);
+                } finally {
+                    hideLoader();
+                }
+            }
+        }
+
+        function exportCatalogCSV() {
+            if (catalogData.length === 0) {
+                alert('Tidak ada data katalog untuk diexport.');
+                return;
+            }
+
+            let csvContent = "data:text/csv;charset=utf-8,Part Number,Kategori,Deskripsi,Proyek,Stok,Lokasi,Tanggal\n";
+            catalogData.forEach(i => {
+                csvContent += `"${i.pn.toUpperCase()}","${i.categoryName}","${i.description}","${i.project}",${i.stock},"${i.location}","${i.date}"\n`;
+            });
+
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `PN_Catalog_Export_${Date.now()}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        // --- 4. MASTER DATA MANAGEMENT (ADMIN) ---
+        function renderMasterDataPanel() {
+            const listContainer = document.getElementById('masterCatList');
+            listContainer.innerHTML = '';
+
+            masterData.forEach(cat => {
+                const btn = document.createElement('button');
+                btn.onclick = () => selectMasterCategory(cat.id);
+                btn.className = `w-full text-left px-3 py-2 rounded-lg text-xs font-semibold flex items-center justify-between transition ${selectedMasterCatId === cat.id ? 'bg-blue-50 border border-blue-300 text-blue-700' : 'hover:bg-slate-100 text-slate-700'}`;
+                btn.innerHTML = `
+                    <span>[${cat.prefix.toUpperCase()}] ${cat.name}</span>
+                    <i class="fa-solid fa-chevron-right text-[10px] text-slate-400"></i>
+                `;
+                listContainer.appendChild(btn);
+            });
+
+            if (!selectedMasterCatId && masterData.length > 0) {
+                selectMasterCategory(masterData[0].id);
+            } else if (selectedMasterCatId) {
+                renderMasterEditorForm(selectedMasterCatId);
+            }
+        }
+
+        function selectMasterCategory(catId) {
+            selectedMasterCatId = catId;
+            renderMasterDataPanel();
+        }
+
+        function renderMasterEditorForm(catId) {
+            const panel = document.getElementById('masterEditorPanel');
+            const cat = masterData.find(c => c.id === catId);
+            if (!cat) return;
+
+            panel.innerHTML = `
+                <div class="flex justify-between items-center border-b pb-3">
+                    <h3 class="font-bold text-slate-800 text-base">Edit Master Data: ${cat.name}</h3>
+                    <div class="flex gap-2">
+                        <button onclick="copyMasterCategory('${cat.id}')" class="bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs px-2.5 py-1.5 rounded font-semibold transition"><i class="fa-solid fa-copy"></i> Duplikat</button>
+                        <button onclick="deleteMasterCategory('${cat.id}')" class="bg-red-100 hover:bg-red-200 text-red-700 text-xs px-2.5 py-1.5 rounded font-semibold transition"><i class="fa-solid fa-trash"></i> Hapus</button>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                    <div>
+                        <label class="block font-bold text-slate-700 mb-1">Nama Kategori</label>
+                        <input type="text" id="mCatName" value="${cat.name}" onchange="updateMasterHeader('${cat.id}')" class="w-full border border-slate-300 rounded px-3 py-1.5 focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block font-bold text-slate-700 mb-1">Prefix Kode (4-Digit Awal)</label>
+                        <input type="text" id="mCatPrefix" maxlength="4" value="${cat.prefix.toUpperCase()}" oninput="this.value = this.value.toUpperCase()" onchange="updateMasterHeader('${cat.id}')" class="w-full border border-slate-300 rounded px-3 py-1.5 font-mono uppercase focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                </div>
+
+                <!-- Template Manager -->
+                <div class="space-y-3 bg-slate-50 p-3.5 rounded-lg border border-slate-200">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1">Template Format Deskripsi (Universal / Default)</label>
+                        <input type="text" id="mCatDescTemplate" value="${cat.descTemplate}" onchange="updateMasterHeader('${cat.id}')" class="w-full bg-white border border-slate-300 rounded px-3 py-1.5 text-xs font-mono focus:ring-2 focus:ring-blue-500 outline-none">
+                        <p class="text-[10px] text-slate-400 mt-1">Gunakan format tag <span class="font-mono">{NamaSegmen}</span> untuk menyusun deskripsi.</p>
+                    </div>
+
+                    <div class="border-t border-slate-200 pt-3 space-y-2">
+                        <div class="flex justify-between items-center">
+                            <span class="text-xs font-bold text-slate-700">Aturan Keterkaitan Template Deskripsi (Aturan Khusus)</span>
+                            <button onclick="addDescRule('${cat.id}')" class="text-[11px] bg-blue-100 hover:bg-blue-200 text-blue-700 px-2 py-0.5 rounded font-semibold">+ Tambah Aturan Khusus</button>
+                        </div>
+                        <div id="mDescRulesContainer" class="space-y-2"></div>
+                    </div>
+                </div>
+
+                <!-- Segments Manager -->
+                <div class="space-y-3 border-t pt-4">
+                    <div class="flex justify-between items-center">
+                        <h4 class="text-xs font-bold text-slate-800 uppercase">Struktur Segmen Digit</h4>
+                        <button onclick="addMasterSegment('${cat.id}')" class="bg-blue-50 hover:bg-blue-100 text-blue-600 text-xs font-semibold px-2.5 py-1 rounded transition"><i class="fa-solid fa-plus"></i> Tambah Segmen</button>
+                    </div>
+                    <div id="mSegmentsContainer" class="space-y-4"></div>
+                </div>
+
+                <!-- Conditional Rules Manager -->
+                <div class="space-y-3 border-t pt-4">
+                    <h4 class="text-xs font-bold text-slate-800 uppercase">ATURAN KETERKAITAN OPSI (CONDITIONAL RULES)</h4>
+                    <p class="text-[11px] text-slate-500">Pilih pasangan segmen induk dan anak, lalu hubungkan pilihan menggunakan checklist cepat.</p>
+                    <div id="mConditionalRulesContainer" class="p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs space-y-3"></div>
+                </div>
+            `;
+
+            renderDescRules(cat);
+            renderMasterSegments(cat);
+            renderConditionalRulesMapping(cat);
+        }
+
+        function updateMasterHeader(catId) {
+            const cat = masterData.find(c => c.id === catId);
+            if (!cat) return;
+
+            cat.name = document.getElementById('mCatName').value;
+            cat.prefix = document.getElementById('mCatPrefix').value.toUpperCase().slice(0, 4);
+            cat.descTemplate = document.getElementById('mCatDescTemplate').value;
+
+            if (cat.segments.length > 0) {
+                cat.segments[0].options = [{ code: cat.prefix, label: `${cat.prefix} (${cat.name})`, desc: cat.name, showInDesc: true }];
+            }
+
+            initCategoryDropdowns();
+            renderMasterDataPanel();
+        }
+
+        function renderDescRules(cat) {
+            const container = document.getElementById('mDescRulesContainer');
+            if (!container) return;
+            container.innerHTML = '';
+
+            if (!cat.descRules || cat.descRules.length === 0) {
+                container.innerHTML = `<div class="text-[11px] text-slate-400 italic">Belum ada aturan deskripsi khusus. Sistem akan memakai template universal.</div>`;
+                return;
+            }
+
+            cat.descRules.forEach((rule, rIdx) => {
+                const div = document.createElement('div');
+                div.className = "bg-white p-2.5 rounded border border-slate-200 space-y-2 text-xs";
+
+                const segSelectOptions = cat.segments.map(s => `<option value="${s.id}" ${s.id === rule.segmentId ? 'selected' : ''}>${s.name}</option>`).join('');
+
+                div.innerHTML = `
+                    <div class="flex flex-col md:flex-row gap-2 items-start md:items-center justify-between">
+                        <div class="flex items-center gap-1.5 flex-1 w-full">
+                            <span class="font-bold text-slate-600 text-[11px]">Jika Segmen:</span>
+                            <select onchange="updateDescRule('${cat.id}', ${rIdx}, 'segmentId', this.value)" class="border rounded px-2 py-1 text-xs bg-slate-50">
+                                ${segSelectOptions}
+                            </select>
+                            <span class="font-bold text-slate-600 text-[11px]">memilih Kode:</span>
+                            <input type="text" value="${rule.triggerCode || ''}" placeholder="Kode (Contoh: CD)" oninput="this.value = this.value.toUpperCase()" onchange="updateDescRule('${cat.id}', ${rIdx}, 'triggerCode', this.value)" class="w-24 font-mono uppercase border rounded px-2 py-1 text-xs">
+                        </div>
+                        <button onclick="removeDescRule('${cat.id}', ${rIdx})" class="text-red-500 hover:text-red-700 text-xs self-end md:self-auto"><i class="fa-solid fa-trash"></i> Hapus Aturan</button>
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-500 mb-0.5">Maka gunakan Format Deskripsi khusus berikut:</label>
+                        <input type="text" value="${rule.template || ''}" onchange="updateDescRule('${cat.id}', ${rIdx}, 'template', this.value)" placeholder="Format khusus..." class="w-full border rounded px-2 py-1 text-xs font-mono bg-blue-50/30">
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        function addDescRule(catId) {
+            const cat = masterData.find(c => c.id === catId);
+            if (!cat) return;
+
+            if (!cat.descRules) cat.descRules = [];
+            const defaultSegId = cat.segments.length > 1 ? cat.segments[1].id : cat.segments[0].id;
+            cat.descRules.push({ segmentId: defaultSegId, triggerCode: "", template: cat.descTemplate });
+            renderDescRules(cat);
+        }
+
+        function updateDescRule(catId, rIdx, field, val) {
+            const cat = masterData.find(c => c.id === catId);
+            if (!cat || !cat.descRules[rIdx]) return;
+            cat.descRules[rIdx][field] = field === 'triggerCode' ? val.toUpperCase() : val;
+        }
+
+        function removeDescRule(catId, rIdx) {
+            const cat = masterData.find(c => c.id === catId);
+            if (!cat || !cat.descRules) return;
+            cat.descRules.splice(rIdx, 1);
+            renderDescRules(cat);
+        }
+
+        function renderMasterSegments(cat) {
+            const container = document.getElementById('mSegmentsContainer');
+            container.innerHTML = '';
+
+            cat.segments.forEach((seg, sIdx) => {
+                const segBox = document.createElement('div');
+                segBox.className = "border border-slate-200 bg-slate-50 p-3 rounded-lg space-y-3";
+                segBox.innerHTML = `
+                    <div class="flex items-center justify-between gap-2 border-b pb-2">
+                        <span class="font-bold text-xs text-slate-700">Segmen ${sIdx + 1}</span>
+                        <div class="flex items-center gap-2">
+                            <label class="text-[11px] text-slate-600 flex items-center gap-1">
+                                <input type="checkbox" ${seg.allowCustom ? 'checked' : ''} onchange="toggleSegCustom('${cat.id}', ${sIdx}, this.checked)"> Fleksibel Custom Input
+                            </label>
+                            ${sIdx > 0 ? `<button onclick="removeMasterSegment('${cat.id}',${sIdx})" class="text-red-600 hover:text-red-800 text-xs"><i class="fa-solid fa-trash"></i></button>` : ''}
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-2 text-xs">
+                        <div>
+                            <label class="block text-slate-500 text-[10px]">Nama Segmen</label>
+                            <input type="text" value="${seg.name}" onchange="updateSegProp('${cat.id}', ${sIdx}, 'name', this.value)" class="w-full border rounded px-2 py-1">
+                        </div>
+                        <div>
+                            <label class="block text-slate-500 text-[10px]">Panjang Digit</label>
+                            <input type="number" min="1" max="20" value="${seg.length}" onchange="updateSegProp('${cat.id}', ${sIdx}, 'length', parseInt(this.value))" class="w-full border rounded px-2 py-1">
+                        </div>
+                    </div>
+
+                    <div class="space-y-1.5 border-t pt-2">
+                        <div class="flex justify-between items-center">
+                            <span class="text-[11px] font-bold text-slate-600">Daftar Pilihan / Nilai Digit</span>
+                            ${sIdx > 0 ? `<button onclick="addSegOption('${cat.id}',${sIdx})" class="text-[10px] text-blue-600 hover:underline font-bold">+ Opsi Pilihan</button>` : ''}
+                        </div>
+                        
+                        <div class="grid grid-cols-12 gap-2 text-[10px] font-bold text-slate-500 px-1 pt-1">
+                            <div class="col-span-2">1. Kode</div>
+                            <div class="col-span-3">2. Nama Pilihan</div>
+                            <div class="col-span-3">3. Deskripsi Produk</div>
+                            <div class="col-span-3 text-center">4. Tampilkan di Deskripsi?</div>
+                            <div class="col-span-1 text-center">Aksi</div>
+                        </div>
+
+                        <div id="seg_opts_${sIdx}" class="space-y-1"></div>
+                    </div>
+                `;
+                container.appendChild(segBox);
+
+                const optsContainer = segBox.querySelector(`#seg_opts_${sIdx}`);
+                seg.options.forEach((opt, oIdx) => {
+                    const isShown = opt.showInDesc !== false;
+                    const row = document.createElement('div');
+                    row.className = "grid grid-cols-12 gap-2 items-center text-xs";
+                    row.innerHTML = `
+                        <div class="col-span-2">
+                            <input type="text" placeholder="Kode (${seg.length}d)" value="${opt.code.toUpperCase()}" oninput="this.value = this.value.toUpperCase()" onchange="updateSegOpt('${cat.id}', ${sIdx}, ${oIdx}, 'code', this.value)" class="w-full font-mono border rounded px-2 py-1 text-xs uppercase" ${sIdx === 0 ? 'readonly' : ''}>
+                        </div>
+                        <div class="col-span-3">
+                            <input type="text" placeholder="Nama Pilihan (Dropdown)" value="${opt.label || ''}" onchange="updateSegOpt('${cat.id}', ${sIdx}, ${oIdx}, 'label', this.value)" class="w-full border rounded px-2 py-1 text-xs">
+                        </div>
+                        <div class="col-span-3">
+                            <input type="text" placeholder="Deskripsi untuk Template" value="${opt.desc !== undefined ? opt.desc : (opt.label || '')}" onchange="updateSegOpt('${cat.id}', ${sIdx}, ${oIdx}, 'desc', this.value)" class="w-full border rounded px-2 py-1 text-xs bg-amber-50/50 border-amber-200">
+                        </div>
+                        <div class="col-span-3 flex justify-center items-center">
+                            <label class="inline-flex items-center gap-1 cursor-pointer bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded text-[10px] font-semibold text-slate-700">
+                                <input type="checkbox" ${isShown ? 'checked' : ''} onchange="updateSegOpt('${cat.id}', ${sIdx}, ${oIdx}, 'showInDesc', this.checked)">
+                                <span class="${isShown ? 'text-blue-600 font-bold' : 'text-slate-400'}">${isShown ? 'Tampilkan' : 'Sembunyikan'}</span>
+                            </label>
+                        </div>
+                        <div class="col-span-1 text-center">
+                            ${sIdx > 0 ? `<button onclick="removeSegOpt('${cat.id}', ${sIdx},${oIdx})" class="text-red-500 hover:text-red-700 text-xs px-1"><i class="fa-solid fa-xmark"></i></button>` : ''}
+                        </div>
+                    `;
+                    optsContainer.appendChild(row);
+                });
+            });
+        }
+
+        function updateSegProp(catId, sIdx, prop, val) {
+            const cat = masterData.find(c => c.id === catId);
+            if (!cat) return;
+            cat.segments[sIdx][prop] = val;
+        }
+
+        function toggleSegCustom(catId, sIdx, val) {
+            const cat = masterData.find(c => c.id === catId);
+            if (!cat) return;
+            cat.segments[sIdx].allowCustom = val;
+        }
+
+        function addMasterSegment(catId) {
+            const cat = masterData.find(c => c.id === catId);
+            if (!cat) return;
+
+            const newSegId = "s" + (cat.segments.length + 1);
+            const newOptCode = "01";
+            cat.segments.push({
+                id: newSegId,
+                name: "Segmen Baru",
+                length: 2,
+                allowCustom: false,
+                options: [{ code: newOptCode, label: "Pilihan 1", desc: "Deskripsi Pilihan 1", showInDesc: true }]
+            });
+
+            renderMasterEditorForm(catId);
+        }
+
+        function removeMasterSegment(catId, sIdx) {
+            const cat = masterData.find(c => c.id === catId);
+            if (!cat) return;
+            cat.segments.splice(sIdx, 1);
+            renderMasterEditorForm(catId);
+        }
+
+        function addSegOption(catId, sIdx) {
+            const cat = masterData.find(c => c.id === catId);
+            if (!cat) return;
+
+            const seg = cat.segments[sIdx];
+            const newCode = "0" + (seg.options.length + 1);
+            seg.options.push({ code: newCode, label: "Pilihan Baru", desc: "Deskripsi Baru", showInDesc: true });
+
+            renderMasterEditorForm(catId);
+        }
+
+        function updateSegOpt(catId, sIdx, oIdx, field, val) {
+            const cat = masterData.find(c => c.id === catId);
+            if (!cat) return;
+            
+            const oldCode = cat.segments[sIdx].options[oIdx].code.toUpperCase();
+            
+            if (field === 'code') {
+                const newCode = val.toUpperCase();
+                cat.segments[sIdx].options[oIdx].code = newCode;
+            } else {
+                cat.segments[sIdx].options[oIdx][field] = val;
+            }
+
+            if (field === 'showInDesc') {
+                renderMasterSegments(cat);
+            }
+        }
+
+        function removeSegOpt(catId, sIdx, oIdx) {
+            const cat = masterData.find(c => c.id === catId);
+            if (!cat) return;
+            cat.segments[sIdx].options.splice(oIdx, 1);
+            renderMasterEditorForm(catId);
+        }
+
+        function renderConditionalRulesMapping(cat) {
+            const container = document.getElementById('mConditionalRulesContainer');
+            if (!container) return;
+
+            if (cat.segments.length < 2) {
+                container.innerHTML = `<div class="text-slate-400 italic">Kategori ini memerlukan minimal 2 segmen untuk mengaktifkan aturan keterkaitan.</div>`;
+                return;
+            }
+
+            if (!cat.conditionalRules) cat.conditionalRules = {};
+
+            let parentSegIdx = container.getAttribute('data-parent-idx') !== null 
+                ? parseInt(container.getAttribute('data-parent-idx')) 
+                : 1;
+                
+            let childSegIdx = container.getAttribute('data-child-idx') !== null 
+                ? parseInt(container.getAttribute('data-child-idx')) 
+                : (parentSegIdx + 1);
+
+            if (parentSegIdx >= cat.segments.length) parentSegIdx = 0;
+            if (childSegIdx >= cat.segments.length) childSegIdx = parentSegIdx + 1;
+
+            container.setAttribute('data-parent-idx', parentSegIdx);
+            container.setAttribute('data-child-idx', childSegIdx);
+
+            const parentSeg = cat.segments[parentSegIdx];
+            const childSeg = cat.segments[childSegIdx];
+
+            let parentOptions = cat.segments.map((s, idx) => `<option value="${idx}" ${idx === parentSegIdx ? 'selected' : ''}>Segmen ${idx + 1}: ${s.name}</option>`).join('');
+            let childOptions = cat.segments.map((s, idx) => `<option value="${idx}" ${idx === childSegIdx ? 'selected' : ''} ${idx <= parentSegIdx ? 'disabled' : ''}>Segmen ${idx + 1}: ${s.name}</option>`).join('');
+
+            container.innerHTML = `
+                <div class="bg-blue-50/50 p-3 rounded-lg border border-blue-200 grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-700 mb-1">Pilih Segmen Induk (Pemicu):</label>
+                        <select id="selParentSeg" onchange="changeRuleSegmentPair('${cat.id}')" class="w-full bg-white border border-slate-300 rounded px-2.5 py-1.5 text-xs font-semibold">
+                            ${parentOptions}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-700 mb-1">Pilih Segmen Anak (Yang Dibatasi):</label>
+                        <select id="selChildSeg" onchange="changeRuleSegmentPair('${cat.id}')" class="w-full bg-white border border-slate-300 rounded px-2.5 py-1.5 text-xs font-semibold">
+                            ${childOptions}
+                        </select>
+                    </div>
+                </div>
+
+                ${childSeg ? `
+                    <div class="text-xs font-semibold text-slate-700 mb-2">
+                        Menghubungkan Opsi Segmen Induk <b>[${parentSeg.name}]</b> ke Opsi Diperbolehkan di Segmen <b>[${childSeg.name}]</b>:
+                    </div>
+                    <div class="space-y-3" id="rulesListContainer"></div>
+                ` : `<div class="text-xs text-amber-600 font-semibold p-2">Pilih Segmen Anak yang urutannya berada di bawah Segmen Induk.</div>`}
+            `;
+
+            if (!childSeg) return;
+
+            const rulesList = container.querySelector('#rulesListContainer');
+
+            parentSeg.options.forEach(pOpt => {
+                const parentCodeUpper = pOpt.code ? pOpt.code.toUpperCase() : "";
+                
+                let currentAllowed = null;
+                if (cat.conditionalRules[parentCodeUpper] !== undefined) {
+                    currentAllowed = cat.conditionalRules[parentCodeUpper].map(c => c.toUpperCase());
+                }
+
+                const card = document.createElement('div');
+                card.className = "bg-white p-3 rounded border border-slate-200 space-y-2";
+                card.innerHTML = `
+                    <div class="flex justify-between items-center border-b pb-1 font-bold text-slate-700">
+                        <span>Pilihan Induk: [${parentCodeUpper}] - ${pOpt.label}</span>
+                        <span class="text-[10px] text-slate-400 font-normal">Checklist Pilihan yang Dibolehkan</span>
+                    </div>
+
+                    <div class="flex flex-wrap gap-2 pt-1">
+                        ${childSeg.options.map(cOpt => {
+                            const childCodeUpper = cOpt.code ? cOpt.code.toUpperCase() : "";
+                            const isChecked = currentAllowed === null || currentAllowed.includes(childCodeUpper);
+                            return `
+                                <label class="inline-flex items-center gap-1 px-2 py-1 rounded bg-slate-100 text-xs border border-slate-200 cursor-pointer hover:bg-blue-50">
+                                    <input type="checkbox" ${isChecked ? 'checked' : ''} onchange="toggleConditionalRule('${cat.id}', '${parentCodeUpper}', '${childCodeUpper}', this.checked)">
+                                    <span class="font-mono font-bold">${childCodeUpper}</span> (${cOpt.label})
+                                </label>
+                            `;
+                        }).join('')}
+                    </div>
+                `;
+                rulesList.appendChild(card);
+            });
+        }
+
+        function changeRuleSegmentPair(catId) {
+            const pIdx = document.getElementById('selParentSeg').value;
+            const cIdx = document.getElementById('selChildSeg').value;
+            const container = document.getElementById('mConditionalRulesContainer');
+            
+            container.setAttribute('data-parent-idx', pIdx);
+            container.setAttribute('data-child-idx', cIdx);
+            
+            const cat = masterData.find(c => c.id === catId);
+            if (cat) renderConditionalRulesMapping(cat);
+        }
+
+        function toggleConditionalRule(catId, parentCode, childCode, isChecked) {
+            const cat = masterData.find(c => c.id === catId);
+            if (!cat) return;
+
+            const pCode = parentCode.toUpperCase();
+            const cCode = childCode.toUpperCase();
+
+            const container = document.getElementById('mConditionalRulesContainer');
+            const childSegIdx = parseInt(container.getAttribute('data-child-idx'));
+            const childSeg = cat.segments[childSegIdx];
+
+            if (!cat.conditionalRules) cat.conditionalRules = {};
+
+            if (cat.conditionalRules[pCode] === undefined) {
+                cat.conditionalRules[pCode] = childSeg.options.map(o => o.code.toUpperCase());
+            }
+
+            if (isChecked) {
+                if (!cat.conditionalRules[pCode].includes(cCode)) {
+                    cat.conditionalRules[pCode].push(cCode);
+                }
+            } else {
+                cat.conditionalRules[pCode] = cat.conditionalRules[pCode].filter(c => c !== cCode);
+            }
+
+            renderConditionalRulesMapping(cat);
+        }
+
+        function createNewCategory() {
+            const newId = "cat_" + Date.now();
+            const newCat = {
+                id: newId,
+                prefix: "NEW1",
+                name: "Kategori Baru",
+                descTemplate: "{Type}, Description : {Spec}",
+                descRules: [],
+                segments: [
+                    { id: "s1", name: "Prefix", length: 4, allowCustom: false, options: [{code: "NEW1", label: "NEW1 (Kategori Baru)", desc: "Kategori Baru", showInDesc: true}] },
+                    { id: "s2", name: "Type", length: 2, allowCustom: false, options: [{code: "01", label: "Tipe A", desc: "Tipe A", showInDesc: true}] },
+                    { id: "s3", name: "Spec", length: 4, allowCustom: true, options: [{code: "1000", label: "Spec 1000", desc: "Spec 1000", showInDesc: true}] }
+                ],
+                conditionalRules: { "NEW1": ["01"], "01": ["1000"] }
+            };
+
+            masterData.push(newCat);
+            initCategoryDropdowns();
+            selectMasterCategory(newId);
+        }
+
+        function copyMasterCategory(catId) {
+            const original = masterData.find(c => c.id === catId);
+            if (!original) return;
+
+            const copy = JSON.parse(JSON.stringify(original));
+            copy.id = "cat_" + Date.now();
+            copy.name = copy.name + " (Copy)";
+            copy.prefix = (copy.prefix + "X").slice(0, 4).toUpperCase();
+
+            masterData.push(copy);
+            initCategoryDropdowns();
+            selectMasterCategory(copy.id);
+        }
+
+        function deleteMasterCategory(catId) {
+            if (confirm('Apakah Anda yakin ingin menghapus kategori ini secara lokal? (Klik "Simpan ke Sheets" untuk memperbarui database cloud)')) {
+                masterData = masterData.filter(c => c.id !== catId);
+                selectedMasterCatId = null;
+                initCategoryDropdowns();
+                renderMasterDataPanel();
+            }
+        }
+
+        function exportMasterDataJSON() {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(masterData, null, 2));
+            const downloadAnchor = document.createElement('a');
+            downloadAnchor.setAttribute("href", dataStr);
+            downloadAnchor.setAttribute("download", `MasterData_PN_${Date.now()}.json`);
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            downloadAnchor.remove();
+        }
+
+        function importMasterDataJSON(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const parsed = JSON.parse(e.target.result);
+                    if (Array.isArray(parsed)) {
+                        masterData = parsed;
+                        initCategoryDropdowns();
+                        selectedMasterCatId = null;
+                        renderMasterDataPanel();
+                        alert('Master Data lokal berhasil di-import! Silakan klik "Simpan ke Sheets" jika ingin menyimpan permanen ke cloud.');
+                    } else {
+                        alert('Format JSON tidak valid.');
+                    }
+                } catch (err) {
+                    alert('Gagal membaca file JSON: ' + err.message);
+                }
+            };
+            reader.readAsText(file);
+        }
+    </script>
+</body>
+</html>
