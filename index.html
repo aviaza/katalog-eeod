@@ -69,7 +69,7 @@
                 </div>
             </nav>
             <div class="p-4 border-t border-slate-700 text-xs text-slate-400 text-center">
-                Cloud Sheets • v8.1
+                Cloud Sheets • v8.2
             </div>
         </aside>
 
@@ -638,20 +638,20 @@
             if (!select) return;
 
             let allowedCodes = null;
+
+            // Evaluasi aturan pembatasan dari segmen-segmen induk sebelumnya
             if (segIndex > 0) {
                 for (let pIdx = 0; pIdx < segIndex; pIdx++) {
                     const parentSeg = category.segments[pIdx];
                     const parentSelect = document.getElementById(`gen_seg_${parentSeg.id}`);
-                    const parentVal = parentSelect ? parentSelect.value : null;
+                    const parentVal = parentSelect ? parentSelect.value.toUpperCase() : null;
 
-                    if (parentVal && category.conditionalRules && category.conditionalRules[parentVal]) {
-                        const rules = category.conditionalRules[parentVal];
-                        if (rules && rules.length > 0) {
-                            if (allowedCodes === null) {
-                                allowedCodes = [...rules];
-                            } else {
-                                allowedCodes = allowedCodes.filter(c => rules.includes(c));
-                            }
+                    if (parentVal && category.conditionalRules && category.conditionalRules[parentVal] !== undefined) {
+                        const rules = category.conditionalRules[parentVal].map(c => c.toUpperCase());
+                        if (allowedCodes === null) {
+                            allowedCodes = [...rules];
+                        } else {
+                            allowedCodes = allowedCodes.filter(c => rules.includes(c));
                         }
                     }
                 }
@@ -660,12 +660,14 @@
             select.innerHTML = '<option value="">-- Pilih --</option>';
             seg.options.forEach(opt => {
                 const upperCode = opt.code ? opt.code.toUpperCase() : "";
-                if (allowedCodes !== null && !allowedCodes.includes(upperCode)) return;
-
-                const o = document.createElement('option');
-                o.value = upperCode;
-                o.textContent = `[${upperCode}] ${opt.label}`;
-                select.appendChild(o);
+                
+                // Tampilkan opsi jika tidak ada pembatasan (allowedCodes === null) ATAU jika kode terdaftar di allowedCodes
+                if (allowedCodes === null || allowedCodes.includes(upperCode)) {
+                    const o = document.createElement('option');
+                    o.value = upperCode;
+                    o.textContent = `[${upperCode}] ${opt.label}`;
+                    select.appendChild(o);
+                }
             });
 
             if (seg.allowCustom) {
@@ -1316,11 +1318,8 @@
             const cat = masterData.find(c => c.id === catId);
             if (!cat) return;
             
-            const oldCode = cat.segments[sIdx].options[oIdx].code.toUpperCase();
-            
             if (field === 'code') {
-                const newCode = val.toUpperCase();
-                cat.segments[sIdx].options[oIdx].code = newCode;
+                cat.segments[sIdx].options[oIdx].code = val.toUpperCase();
             } else {
                 cat.segments[sIdx].options[oIdx][field] = val;
             }
@@ -1350,14 +1349,14 @@
 
             let parentSegIdx = container.getAttribute('data-parent-idx') !== null 
                 ? parseInt(container.getAttribute('data-parent-idx')) 
-                : 1;
+                : 0;
                 
             let childSegIdx = container.getAttribute('data-child-idx') !== null 
                 ? parseInt(container.getAttribute('data-child-idx')) 
-                : (parentSegIdx + 1);
+                : 1;
 
             if (parentSegIdx >= cat.segments.length) parentSegIdx = 0;
-            if (childSegIdx >= cat.segments.length) childSegIdx = parentSegIdx + 1;
+            if (childSegIdx >= cat.segments.length || childSegIdx <= parentSegIdx) childSegIdx = parentSegIdx + 1;
 
             container.setAttribute('data-parent-idx', parentSegIdx);
             container.setAttribute('data-child-idx', childSegIdx);
@@ -1449,6 +1448,8 @@
             const cCode = childCode.toUpperCase();
 
             const container = document.getElementById('mConditionalRulesContainer');
+            if (!container) return;
+            
             const childSegIdx = parseInt(container.getAttribute('data-child-idx'));
             const childSeg = cat.segments[childSegIdx];
 
@@ -1465,8 +1466,6 @@
             } else {
                 cat.conditionalRules[pCode] = cat.conditionalRules[pCode].filter(c => c !== cCode);
             }
-
-            renderConditionalRulesMapping(cat);
         }
 
         function createNewCategory() {
