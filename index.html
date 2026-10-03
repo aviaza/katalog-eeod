@@ -97,8 +97,7 @@
                         Log In
                     </button>
                     <div class="text-xs text-slate-500 text-center border-t border-slate-100 pt-3">
-                        Default login: <br>
-                        Admin: <span class="font-mono text-slate-700">admin / admin</span> | User: <span class="font-mono text-slate-700">user / user</span>
+                        Dibuat hanya semata-mata karena mager dengan Excel <br>
                     </div>
                 </form>
             </div>
@@ -462,18 +461,35 @@
             const p = document.getElementById('loginPassword').value.trim().toLowerCase();
             const errDiv = document.getElementById('loginError');
 
-            if (u === 'admin' && p === 'admin') {
-                currentUser = { name: 'Administrator', role: 'admin' };
-            } else if (u === 'user' && p === 'user') {
-                currentUser = { name: 'Standard User', role: 'user' };
-            } else {
-                errDiv.textContent = 'Username atau password salah!';
-                errDiv.classList.remove('hidden');
-                return;
-            }
+            async function handleLogin(e) {
+    e.preventDefault();
+    const u = document.getElementById('loginUsername').value.trim();
+    const p = document.getElementById('loginPassword').value.trim();
+    const errDiv = document.getElementById('loginError');
 
-            errDiv.classList.add('hidden');
-            setupUserUI();
+    showLoader("Verifikasi Akun...");
+                try {
+                    const res = await fetch(API_URL, {
+                        method: 'POST',
+                        body: JSON.stringify({ action: "login", username: u, password: p })
+                    });
+                    const result = await res.json();
+            
+                    if (result.status === "success") {
+                        currentUser = result.user;
+                        errDiv.classList.add('hidden');
+                        setupUserUI();
+                    } else {
+                        errDiv.textContent = result.message || 'Username atau password salah!';
+                        errDiv.classList.remove('hidden');
+                    }
+                } catch (err) {
+                    errDiv.textContent = "Gagal terhubung ke server login: " + err.message;
+                    errDiv.classList.remove('hidden');
+                } finally {
+                    hideLoader();
+                }
+            }
         }
 
         function handleLogout() {
