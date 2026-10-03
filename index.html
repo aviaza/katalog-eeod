@@ -32,7 +32,6 @@
                 <p class="text-xs text-slate-400">Connected to Google Sheets Database</p>
             </div>
         </div>
-        <!-- USER INFO TERSEMBUNYI SECARA DEFAULT -->
         <div class="flex items-center space-x-4">
             <div id="userInfo" class="text-sm text-right hidden">
                 <div id="userName" class="font-semibold text-slate-200"></div>
@@ -45,7 +44,7 @@
     </header>
 
     <div class="flex flex-1 overflow-hidden">
-        <!-- SIDEBAR TERSEMBUNYI SECARA DEFAULT (!hidden) -->
+        <!-- SIDEBAR NAVIGATION -->
         <aside id="sidebar" class="w-64 bg-slate-800 text-slate-300 flex flex-col justify-between hidden !hidden md:flex">
             <nav class="p-4 space-y-1">
                 <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3 px-3">Menu Utama</div>
@@ -70,14 +69,14 @@
                 </div>
             </nav>
             <div class="p-4 border-t border-slate-700 text-xs text-slate-400 text-center">
-                Cloud Sheets • v8.3
+                Cloud Sheets • v8.4
             </div>
         </aside>
 
         <!-- MAIN CONTENT AREA -->
         <main class="flex-1 p-6 overflow-y-auto">
             
-            <!-- FORM LOGIN BERSIH -->
+            <!-- LOGIN PANEL -->
             <div id="loginView" class="max-w-md mx-auto my-12 bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden">
                 <div class="bg-slate-900 text-white p-6 text-center">
                     <i class="fa-solid fa-lock text-4xl text-blue-400 mb-2"></i>
@@ -100,7 +99,7 @@
                 </form>
             </div>
 
-            <!-- APP CONTENT (DISEMBUNYIKAN SEBELUM LOGIN) -->
+            <!-- APP CONTENT -->
             <div id="appViews" class="hidden">
 
                 <!-- 1. TAB GENERATOR -->
@@ -126,12 +125,18 @@
                             </div>
                         </div>
 
+                        <!-- Panel Output Part Number & Quick Copy -->
                         <div class="bg-slate-900 text-white p-5 rounded-xl shadow-md flex flex-col justify-between space-y-4">
                             <div class="space-y-4">
                                 <h3 class="text-sm font-bold text-blue-400 uppercase tracking-wider border-b border-slate-700 pb-2">Hasil Formasi Part Number</h3>
                                 
                                 <div>
-                                    <label class="text-xs text-slate-400 block mb-1">Generated Part Number (20-Digit Limit):</label>
+                                    <div class="flex justify-between items-center mb-1">
+                                        <label class="text-xs text-slate-400 block">Generated Part Number (20-Digit Limit):</label>
+                                        <button onclick="copyToClipboard('genPnDisplay', 'Part Number berhasil disalin!')" class="text-[11px] bg-slate-800 hover:bg-slate-700 text-blue-400 border border-slate-700 px-2 py-0.5 rounded transition flex items-center gap-1">
+                                            <i class="fa-solid fa-copy"></i> Salin PN
+                                        </button>
+                                    </div>
                                     <div id="genPnDisplay" class="font-mono text-xl font-bold bg-slate-800 p-3 rounded-lg border border-slate-700 text-green-400 break-all text-center tracking-wider">
                                         --------------------
                                     </div>
@@ -139,7 +144,12 @@
                                 </div>
 
                                 <div>
-                                    <label class="text-xs text-slate-400 block mb-1">Deskripsi Terbentuk:</label>
+                                    <div class="flex justify-between items-center mb-1">
+                                        <label class="text-xs text-slate-400 block">Deskripsi Terbentuk:</label>
+                                        <button onclick="copyToClipboard('genDescDisplay', 'Deskripsi berhasil disalin!')" class="text-[11px] bg-slate-800 hover:bg-slate-700 text-blue-400 border border-slate-700 px-2 py-0.5 rounded transition flex items-center gap-1">
+                                            <i class="fa-solid fa-copy"></i> Salin Deskripsi
+                                        </button>
+                                    </div>
                                     <div id="genDescDisplay" class="text-sm bg-slate-800 p-3 rounded-lg border border-slate-700 text-slate-200 min-h-[60px] italic">
                                         Deskripsi akan otomatis tersusun...
                                     </div>
@@ -219,7 +229,12 @@
                             </div>
 
                             <div class="space-y-1 bg-slate-50 p-3 rounded-lg border border-slate-200">
-                                <div class="text-xs font-bold text-slate-500 uppercase">Hasil Deskripsi Lengkap:</div>
+                                <div class="flex justify-between items-center">
+                                    <div class="text-xs font-bold text-slate-500 uppercase">Hasil Deskripsi Lengkap:</div>
+                                    <button onclick="copyToClipboard('decoderFullDesc', 'Deskripsi terdeko berhasil disalin!')" class="text-[11px] bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 px-2 py-0.5 rounded transition flex items-center gap-1 font-semibold">
+                                        <i class="fa-solid fa-copy"></i> Salin
+                                    </button>
+                                </div>
                                 <div id="decoderFullDesc" class="text-sm font-medium text-slate-800"></div>
                             </div>
                         </div>
@@ -270,12 +285,20 @@
                 <section id="view-masterdata" class="space-y-6 hidden">
                     <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b pb-3">
                         <div>
-                            <h2 class="text-xl font-bold text-slate-800">Pengelolaan Master Data (Admin)</h2>
+                            <div class="flex items-center gap-2">
+                                <h2 class="text-xl font-bold text-slate-800">Pengelolaan Master Data (Admin)</h2>
+                                <span id="masterDataUnsavedBadge" class="hidden text-[10px] bg-amber-500 text-white px-2 py-0.5 rounded-full font-bold uppercase tracking-wide">
+                                    Ada Perubahan Belum Disimpan
+                                </span>
+                            </div>
                             <p class="text-xs text-slate-500">Atur kategori, format digit, opsi segmen, dan simpan langsung ke Google Sheets</p>
                         </div>
                         <div class="flex items-center gap-2">
-                            <button onclick="saveAllMasterToCloud()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition flex items-center gap-1">
+                            <button onclick="saveAllMasterToCloud()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3.5 py-1.5 rounded-lg transition flex items-center gap-1.5 shadow-sm">
                                 <i class="fa-solid fa-cloud-arrow-up"></i> Simpan ke Sheets
+                            </button>
+                            <button onclick="discardMasterChanges()" class="bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-semibold px-3 py-1.5 rounded-lg transition flex items-center gap-1">
+                                <i class="fa-solid fa-rotate-left"></i> Discard
                             </button>
                             <button onclick="createNewCategory()" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition flex items-center gap-1">
                                 <i class="fa-solid fa-plus"></i> Kategori Baru
@@ -352,9 +375,8 @@
 
     <!-- JAVASCRIPT LOGIC -->
     <script>
-        const API_URL = "https://script.google.com/macros/s/AKfycbxzuAukT2ZeM6oFyAQz-ddPkQFFEeALk3AIxreN0CydCNqZHktRr5rUDqjGCp2UMA8/exec";
+        const API_URL = "https://script.google.com/macros/s/AKfycbx1zO9sSGau7zAi6Q0H2DJ-5nNkxe8kqM5p5HrAOYGsrMpPpbw5hBpdZHHykKzxLvI/exec";
 
-        // --- DEFAULT MASTER DATA (FALLBACK) ---
         const DEFAULT_MASTER_DATA = [
             {
                 id: "cat_cable_tray",
@@ -370,12 +392,14 @@
                     { id: "s5", name: "Material", length: 3, allowCustom: false, options: [{code: "PVC", label: "PVC Plastic", desc: "PVC", showInDesc: true}, {code: "ST3", label: "Steel SS316", desc: "SS316", showInDesc: true}, {code: "ALU", label: "Aluminum", desc: "Aluminum", showInDesc: true}] },
                     { id: "s6", name: "Finish", length: 4, allowCustom: false, options: [{code: "0000", label: "Standard / Plain", desc: "STANDARD", showInDesc: false}, {code: "GALV", label: "Galvanized", desc: "Hot Dip Galvanized", showInDesc: true}] }
                 ],
-                conditionalRules: { "01": ["3000", "2000"], "02": ["2000"] }
+                conditionalRules: {}
             }
         ];
 
         let currentUser = null;
         let masterData = [];
+        let originalMasterDataBackup = [];
+        let isMasterDataDirty = false;
         let catalogData = [];
         let activeTab = 'generator';
         let selectedMasterCatId = null;
@@ -387,6 +411,39 @@
 
         function hideLoader() {
             document.getElementById('globalLoader').classList.add('hidden');
+        }
+
+        // SALIN CEPAT KE CLIPBOARD
+        function copyToClipboard(elementIdOrText, successMsg = "Berhasil disalin!") {
+            let textToCopy = "";
+            const el = document.getElementById(elementIdOrText);
+            
+            if (el) {
+                textToCopy = el.textContent || el.innerText || "";
+            } else {
+                textToCopy = elementIdOrText;
+            }
+
+            textToCopy = textToCopy.trim();
+            if (!textToCopy || textToCopy.startsWith("-")) {
+                alert("Tidak ada teks valid untuk disalin!");
+                return;
+            }
+
+            navigator.clipboard.writeText(textToCopy).then(() => {
+                alert(successMsg);
+            }).catch(err => {
+                alert("Gagal menyalin: " + err);
+            });
+        }
+
+        function setMasterDataDirty(dirty = true) {
+            isMasterDataDirty = dirty;
+            const badge = document.getElementById('masterDataUnsavedBadge');
+            if (badge) {
+                if (dirty) badge.classList.remove('hidden');
+                else badge.classList.add('hidden');
+            }
         }
 
         async function handleLogin(e) {
@@ -420,13 +477,16 @@
         }
 
         function handleLogout() {
+            if (isMasterDataDirty && !confirm("Ada perubahan Master Data yang belum disimpan ke Google Sheets. Yakin ingin keluar?")) {
+                return;
+            }
+
             currentUser = null;
+            setMasterDataDirty(false);
             document.getElementById('loginView').classList.remove('hidden');
             document.getElementById('appViews').classList.add('hidden');
             document.getElementById('userInfo').classList.add('hidden');
             document.getElementById('logoutBtn').classList.add('hidden');
-            
-            // Sembunyikan kembali Sidebar saat Logout
             document.getElementById('sidebar').classList.add('!hidden');
 
             document.getElementById('loginUsername').value = '';
@@ -471,6 +531,9 @@
                 masterData = DEFAULT_MASTER_DATA;
             } finally {
                 hideLoader();
+                // Simpan backup murni dari Sheets
+                originalMasterDataBackup = JSON.parse(JSON.stringify(masterData));
+                setMasterDataDirty(false);
                 initCategoryDropdowns();
                 if (activeTab === 'masterdata') renderMasterDataPanel();
             }
@@ -501,6 +564,8 @@
                 });
                 const result = await res.json();
                 alert(result.message || "Master Data berhasil disimpan!");
+                originalMasterDataBackup = JSON.parse(JSON.stringify(masterData));
+                setMasterDataDirty(false);
             } catch (err) {
                 alert("Gagal menyimpan Master Data: " + err.message);
             } finally {
@@ -508,10 +573,25 @@
             }
         }
 
+        function discardMasterChanges() {
+            if (confirm("Membatalkan seluruh perubahan yang belum disimpan ke Google Sheets?")) {
+                masterData = JSON.parse(JSON.stringify(originalMasterDataBackup));
+                setMasterDataDirty(false);
+                initCategoryDropdowns();
+                renderMasterDataPanel();
+            }
+        }
+
         function switchTab(tabId) {
             if (currentUser.role !== 'admin' && tabId === 'masterdata') {
                 alert('Akses ditolak. Hanya Admin yang dapat mengakses Kelola Master Data.');
                 return;
+            }
+
+            if (activeTab === 'masterdata' && tabId !== 'masterdata' && isMasterDataDirty) {
+                if (!confirm("Ada perubahan Master Data yang belum disimpan ke Google Sheets. Yakin ingin pindah tab?")) {
+                    return;
+                }
             }
 
             activeTab = tabId;
@@ -622,6 +702,7 @@
             populateSegmentOptions(catId, 0);
         }
 
+        // AMAN DARI BUG PILIHAN SEGMEN HILANG
         function populateSegmentOptions(catId, segIndex) {
             const category = masterData.find(c => c.id === catId);
             if (!category || segIndex >= category.segments.length) return;
@@ -638,7 +719,7 @@
                     const parentSelect = document.getElementById(`gen_seg_${parentSeg.id}`);
                     const parentVal = parentSelect ? parentSelect.value.toUpperCase() : null;
 
-                    if (parentVal && category.conditionalRules && category.conditionalRules[parentVal] !== undefined) {
+                    if (parentVal && category.conditionalRules && Array.isArray(category.conditionalRules[parentVal])) {
                         const rules = category.conditionalRules[parentVal].map(c => c.toUpperCase());
                         if (allowedCodes === null) {
                             allowedCodes = [...rules];
@@ -653,6 +734,7 @@
             seg.options.forEach(opt => {
                 const upperCode = opt.code ? opt.code.toUpperCase() : "";
                 
+                // Tampilkan opsi jika tidak diset pembatasan khusus (allowedCodes === null)
                 if (allowedCodes === null || allowedCodes.includes(upperCode)) {
                     const o = document.createElement('option');
                     o.value = upperCode;
@@ -907,9 +989,21 @@
                 const tr = document.createElement('tr');
                 tr.className = "hover:bg-slate-50 border-b";
                 tr.innerHTML = `
-                    <td class="p-3 font-mono font-bold text-blue-600 uppercase">${item.pn}</td>
+                    <td class="p-3 font-mono font-bold text-blue-600 uppercase flex items-center justify-between group">
+                        <span>${item.pn}</span>
+                        <button onclick="copyToClipboard('${item.pn}', 'Part Number disalin!')" class="text-[10px] text-slate-400 hover:text-blue-600 p-1 rounded" title="Salin PN">
+                            <i class="fa-solid fa-copy"></i>
+                        </button>
+                    </td>
                     <td class="p-3 font-semibold text-slate-700">${item.categoryName}</td>
-                    <td class="p-3 text-slate-600">${item.description}</td>
+                    <td class="p-3 text-slate-600">
+                        <div class="flex items-center justify-between gap-2">
+                            <span>${item.description}</span>
+                            <button onclick="copyToClipboard('${item.description.replace(/'/g, "\\'")}', 'Deskripsi disalin!')" class="text-[10px] text-slate-400 hover:text-blue-600 p-1 rounded" title="Salin Deskripsi">
+                                <i class="fa-solid fa-copy"></i>
+                            </button>
+                        </div>
+                    </td>
                     <td class="p-3 text-slate-500">${item.project}</td>
                     <td class="p-3 font-semibold text-slate-700">${item.stock}</td>
                     <td class="p-3 text-slate-500">${item.location}</td>
@@ -1109,6 +1203,7 @@
                 cat.segments[0].options = [{ code: cat.prefix, label: `${cat.prefix} (${cat.name})`, desc: cat.name, showInDesc: true }];
             }
 
+            setMasterDataDirty(true);
             initCategoryDropdowns();
             renderMasterDataPanel();
         }
@@ -1157,6 +1252,7 @@
             if (!cat.descRules) cat.descRules = [];
             const defaultSegId = cat.segments.length > 1 ? cat.segments[1].id : cat.segments[0].id;
             cat.descRules.push({ segmentId: defaultSegId, triggerCode: "", template: cat.descTemplate });
+            setMasterDataDirty(true);
             renderDescRules(cat);
         }
 
@@ -1164,12 +1260,14 @@
             const cat = masterData.find(c => c.id === catId);
             if (!cat || !cat.descRules[rIdx]) return;
             cat.descRules[rIdx][field] = field === 'triggerCode' ? val.toUpperCase() : val;
+            setMasterDataDirty(true);
         }
 
         function removeDescRule(catId, rIdx) {
             const cat = masterData.find(c => c.id === catId);
             if (!cat || !cat.descRules) return;
             cat.descRules.splice(rIdx, 1);
+            setMasterDataDirty(true);
             renderDescRules(cat);
         }
 
@@ -1255,12 +1353,14 @@
             const cat = masterData.find(c => c.id === catId);
             if (!cat) return;
             cat.segments[sIdx][prop] = val;
+            setMasterDataDirty(true);
         }
 
         function toggleSegCustom(catId, sIdx, val) {
             const cat = masterData.find(c => c.id === catId);
             if (!cat) return;
             cat.segments[sIdx].allowCustom = val;
+            setMasterDataDirty(true);
         }
 
         function addMasterSegment(catId) {
@@ -1277,6 +1377,7 @@
                 options: [{ code: newOptCode, label: "Pilihan 1", desc: "Deskripsi Pilihan 1", showInDesc: true }]
             });
 
+            setMasterDataDirty(true);
             renderMasterEditorForm(catId);
         }
 
@@ -1284,6 +1385,7 @@
             const cat = masterData.find(c => c.id === catId);
             if (!cat) return;
             cat.segments.splice(sIdx, 1);
+            setMasterDataDirty(true);
             renderMasterEditorForm(catId);
         }
 
@@ -1295,6 +1397,7 @@
             const newCode = "0" + (seg.options.length + 1);
             seg.options.push({ code: newCode, label: "Pilihan Baru", desc: "Deskripsi Baru", showInDesc: true });
 
+            setMasterDataDirty(true);
             renderMasterEditorForm(catId);
         }
 
@@ -1308,6 +1411,7 @@
                 cat.segments[sIdx].options[oIdx][field] = val;
             }
 
+            setMasterDataDirty(true);
             if (field === 'showInDesc') {
                 renderMasterSegments(cat);
             }
@@ -1317,6 +1421,7 @@
             const cat = masterData.find(c => c.id === catId);
             if (!cat) return;
             cat.segments[sIdx].options.splice(oIdx, 1);
+            setMasterDataDirty(true);
             renderMasterEditorForm(catId);
         }
 
@@ -1383,7 +1488,7 @@
                 const parentCodeUpper = pOpt.code ? pOpt.code.toUpperCase() : "";
                 
                 let currentAllowed = null;
-                if (cat.conditionalRules[parentCodeUpper] !== undefined) {
+                if (cat.conditionalRules[parentCodeUpper] !== undefined && Array.isArray(cat.conditionalRules[parentCodeUpper])) {
                     currentAllowed = cat.conditionalRules[parentCodeUpper].map(c => c.toUpperCase());
                 }
 
@@ -1439,7 +1544,7 @@
 
             if (!cat.conditionalRules) cat.conditionalRules = {};
 
-            if (cat.conditionalRules[pCode] === undefined) {
+            if (!Array.isArray(cat.conditionalRules[pCode])) {
                 cat.conditionalRules[pCode] = childSeg.options.map(o => o.code.toUpperCase());
             }
 
@@ -1450,6 +1555,8 @@
             } else {
                 cat.conditionalRules[pCode] = cat.conditionalRules[pCode].filter(c => c !== cCode);
             }
+
+            setMasterDataDirty(true);
         }
 
         function createNewCategory() {
@@ -1465,10 +1572,11 @@
                     { id: "s2", name: "Type", length: 2, allowCustom: false, options: [{code: "01", label: "Tipe A", desc: "Tipe A", showInDesc: true}] },
                     { id: "s3", name: "Spec", length: 4, allowCustom: true, options: [{code: "1000", label: "Spec 1000", desc: "Spec 1000", showInDesc: true}] }
                 ],
-                conditionalRules: { "NEW1": ["01"], "01": ["1000"] }
+                conditionalRules: {}
             };
 
             masterData.push(newCat);
+            setMasterDataDirty(true);
             initCategoryDropdowns();
             selectMasterCategory(newId);
         }
@@ -1483,14 +1591,16 @@
             copy.prefix = (copy.prefix + "X").slice(0, 4).toUpperCase();
 
             masterData.push(copy);
+            setMasterDataDirty(true);
             initCategoryDropdowns();
             selectMasterCategory(copy.id);
         }
 
         function deleteMasterCategory(catId) {
-            if (confirm('Apakah Anda yakin ingin menghapus kategori ini? (Jangan lupa klik "Simpan ke Sheets" untuk memperbarui database)')) {
+            if (confirm('Apakah Anda yakin ingin menghapus kategori ini?')) {
                 masterData = masterData.filter(c => c.id !== catId);
                 selectedMasterCatId = null;
+                setMasterDataDirty(true);
                 initCategoryDropdowns();
                 renderMasterDataPanel();
             }
@@ -1516,6 +1626,7 @@
                     const parsed = JSON.parse(e.target.result);
                     if (Array.isArray(parsed)) {
                         masterData = parsed;
+                        setMasterDataDirty(true);
                         initCategoryDropdowns();
                         selectedMasterCatId = null;
                         renderMasterDataPanel();
