@@ -69,7 +69,7 @@
                 </div>
             </nav>
             <div class="p-4 border-t border-slate-700 text-xs text-slate-400 text-center">
-                Cloud Sheets • v9.0
+                Cloud Sheets • v9.1
             </div>
         </aside>
 
@@ -393,6 +393,7 @@
     <!-- JAVASCRIPT LOGIC -->
     <script>
         const API_URL = "https://script.google.com/macros/s/AKfycbx1zO9sSGau7zAi6Q0H2DJ-5nNkxe8kqM5p5HrAOYGsrMpPpbw5hBpdZHHykKzxLvI/exec";
+        const SESSION_TIMEOUT_MS = 60 * 60 * 1000; // 1 JAM DALAM MILIDETIK
 
         const DEFAULT_MASTER_DATA = [
             {
@@ -420,6 +421,72 @@
         let catalogData = [];
         let activeTab = 'generator';
         let selectedMasterCatId = null;
+        let sessionTimer = null;
+
+        // CEK SESI TERSEMBUNYI SAAT HALAMAN DI-REFRESH
+        window.addEventListener('DOMContentLoaded', () => {
+            checkExistingSession();
+            setupActivityTracker();
+        });
+
+        function checkExistingSession() {
+            const savedSession = localStorage.getItem('pn_user_session');
+            if (savedSession) {
+                try {
+                    const sessionData = JSON.parse(savedSession);
+                    const now = Date.now();
+                    
+                    // JIKA MASIH DALAM WAKTU 1 JAM SANGAT TERAKHIR
+                    if (now - sessionData.lastActivity < SESSION_TIMEOUT_MS) {
+                        currentUser = sessionData.user;
+                        updateSessionTimestamp();
+                        setupUserUI();
+                        return;
+                    }
+                } catch (e) {
+                    console.error("Session parse error", e);
+                }
+            }
+            // JIKA KADALUARSA ATAU TIDAK ADA
+            clearSessionData();
+        }
+
+        function updateSessionTimestamp() {
+            if (currentUser) {
+                const sessionData = {
+                    user: currentUser,
+                    lastActivity: Date.now()
+                };
+                localStorage.setItem('pn_user_session', JSON.stringify(sessionData));
+            }
+        }
+
+        function clearSessionData() {
+            localStorage.removeItem('pn_user_session');
+        }
+
+        function setupActivityTracker() {
+            // SETIAP KALI PENGGUNA AKTIF (KLIK/KETIK/GESER MOUSE) PERBAHARUI TIMESTAMP
+            const events = ['mousemove', 'keydown', 'click', 'scroll'];
+            events.forEach(evt => {
+                window.addEventListener(evt, () => {
+                    if (currentUser) {
+                        updateSessionTimestamp();
+                        resetInactivityTimer();
+                    }
+                }, { passive: true });
+            });
+        }
+
+        function resetInactivityTimer() {
+            if (sessionTimer) clearTimeout(sessionTimer);
+            sessionTimer = setTimeout(() => {
+                if (currentUser) {
+                    alert("Sesi Anda telah berakhir karena tidak ada aktivitas selama 1 jam.");
+                    handleLogout(true);
+                }
+            }, SESSION_TIMEOUT_MS);
+        }
 
         function showLoader(text = "Loading...") {
             document.getElementById('loaderText').textContent = text;
@@ -478,6 +545,8 @@
 
                 if (result.status === "success") {
                     currentUser = result.user;
+                    updateSessionTimestamp();
+                    resetInactivityTimer();
                     errDiv.classList.add('hidden');
                     setupUserUI();
                 } else {
@@ -492,13 +561,16 @@
             }
         }
 
-        function handleLogout() {
-            if (isMasterDataDirty && !confirm("Ada perubahan Master Data yang belum disimpan ke Google Sheets. Yakin ingin keluar?")) {
+        function handleLogout(force = false) {
+            if (!force && isMasterDataDirty && !confirm("Ada perubahan Master Data yang belum disimpan ke Google Sheets. Yakin ingin keluar?")) {
                 return;
             }
 
             currentUser = null;
+            clearSessionData();
+            if (sessionTimer) clearTimeout(sessionTimer);
             setMasterDataDirty(false);
+
             document.getElementById('loginView').classList.remove('hidden');
             document.getElementById('appViews').classList.add('hidden');
             document.getElementById('userInfo').classList.add('hidden');
@@ -805,7 +877,6 @@
             }
         }
 
-        // LOGIKA AUTO-PADDING PADA INPUT CUSTOM (Contoh: '1' -> '0001', '300' -> '0300')
         function updateGeneratedPnDisplay() {
             const catId = document.getElementById('genCategorySelect').value;
             const pnDisplay = document.getElementById('genPnDisplay');
@@ -1377,7 +1448,7 @@
                             </label>
                         </div>
                         <div class="col-span-1 text-center">
-                            ${sIdx > 0 ? `<button onclick="removeSegOpt('${cat.id}', ${sIdx},${oIdx})" class="text-red-500 hover:text-red-700 text-xs px-1"><i class="fa-solid fa-xmark"></i></button>` : ''}
+                            ${sIdx > 0 ? `<button onclick="removeSegOpt('${cat.id}', ${sIdx}, ${oIdx})" class="text-red-500 hover:text-red-700 text-xs px-1"><i class="fa-solid fa-xmark"></i></button>` : ''}
                         </div>
                     `;
                     optsContainer.appendChild(row);
