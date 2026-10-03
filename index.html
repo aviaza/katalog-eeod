@@ -44,7 +44,7 @@
     </header>
 
     <div class="flex flex-1 overflow-hidden">
-        <!-- SIDEBAR NAVIGATION -->
+        <!-- SIDEBAR NAVIGATION (DISEMBUNYIKAN SECARA DEFAULT SEBELUM LOGIN) -->
         <aside id="sidebar" class="w-64 bg-slate-800 text-slate-300 flex flex-col justify-between hidden !hidden md:flex">
             <nav class="p-4 space-y-1">
                 <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3 px-3">Menu Utama</div>
@@ -69,14 +69,14 @@
                 </div>
             </nav>
             <div class="p-4 border-t border-slate-700 text-xs text-slate-400 text-center">
-                Cloud Sheets • v8.4
+                Cloud Sheets • v8.5
             </div>
         </aside>
 
         <!-- MAIN CONTENT AREA -->
         <main class="flex-1 p-6 overflow-y-auto">
             
-            <!-- LOGIN PANEL -->
+            <!-- FORM LOGIN BERSIH -->
             <div id="loginView" class="max-w-md mx-auto my-12 bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden">
                 <div class="bg-slate-900 text-white p-6 text-center">
                     <i class="fa-solid fa-lock text-4xl text-blue-400 mb-2"></i>
@@ -125,7 +125,7 @@
                             </div>
                         </div>
 
-                        <!-- Panel Output Part Number & Quick Copy -->
+                        <!-- Panel Output Part Number & Salin Cepat -->
                         <div class="bg-slate-900 text-white p-5 rounded-xl shadow-md flex flex-col justify-between space-y-4">
                             <div class="space-y-4">
                                 <h3 class="text-sm font-bold text-blue-400 uppercase tracking-wider border-b border-slate-700 pb-2">Hasil Formasi Part Number</h3>
@@ -531,7 +531,6 @@
                 masterData = DEFAULT_MASTER_DATA;
             } finally {
                 hideLoader();
-                // Simpan backup murni dari Sheets
                 originalMasterDataBackup = JSON.parse(JSON.stringify(masterData));
                 setMasterDataDirty(false);
                 initCategoryDropdowns();
@@ -687,7 +686,7 @@
                     customInput.type = "text";
                     customInput.id = `gen_custom_${seg.id}`;
                     customInput.maxLength = seg.length;
-                    customInput.placeholder = `Atau ketik custom (${seg.length} karakter)...`;
+                    customInput.placeholder = `Atau ketik custom (Contoh: 1 / 300 / 1500)...`;
                     customInput.className = "hidden w-full mt-2 px-3 py-1.5 border border-blue-300 rounded text-xs font-mono uppercase bg-blue-50/50 focus:outline-none focus:ring-2 focus:ring-blue-500";
                     customInput.oninput = (e) => {
                         e.target.value = e.target.value.toUpperCase();
@@ -702,7 +701,6 @@
             populateSegmentOptions(catId, 0);
         }
 
-        // AMAN DARI BUG PILIHAN SEGMEN HILANG
         function populateSegmentOptions(catId, segIndex) {
             const category = masterData.find(c => c.id === catId);
             if (!category || segIndex >= category.segments.length) return;
@@ -734,7 +732,6 @@
             seg.options.forEach(opt => {
                 const upperCode = opt.code ? opt.code.toUpperCase() : "";
                 
-                // Tampilkan opsi jika tidak diset pembatasan khusus (allowedCodes === null)
                 if (allowedCodes === null || allowedCodes.includes(upperCode)) {
                     const o = document.createElement('option');
                     o.value = upperCode;
@@ -781,6 +778,7 @@
             }
         }
 
+        // PEMBENTUKAN KODE PN CUSTOM DENGAN OTO-ZERO PADDING
         function updateGeneratedPnDisplay() {
             const catId = document.getElementById('genCategorySelect').value;
             const pnDisplay = document.getElementById('genPnDisplay');
@@ -808,8 +806,20 @@
 
                 if (select) {
                     if (select.value === "__CUSTOM__" && customInput) {
-                        codeVal = customInput.value.toUpperCase().padStart(seg.length, '0').slice(0, seg.length);
-                        labelVal = customInput.value.toUpperCase();
+                        let userVal = customInput.value.trim().toUpperCase();
+                        
+                        if (userVal) {
+                            // JIKA INPUT ANGKA MURNI: OTO-ZERO PADDING SESUAI seg.length (misal '1' -> '0001', '300' -> '0300')
+                            if (/^\d+$/.test(userVal)) {
+                                codeVal = userVal.padStart(seg.length, '0').slice(-seg.length);
+                            } else {
+                                codeVal = userVal.padStart(seg.length, '0').slice(0, seg.length);
+                            }
+                            labelVal = userVal;
+                        } else {
+                            codeVal = "-".repeat(seg.length);
+                            labelVal = "...";
+                        }
                         selectedCodeMap[seg.id] = codeVal;
                     } else if (select.value) {
                         codeVal = select.value.toUpperCase();
