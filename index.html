@@ -1,785 +1,1217 @@
-<script>
-    const API_URL = "https://script.google.com/macros/s/AKfycbzDfWZmfsc2XXfh61ZQo8vPurG8vmATNrqc0DnVkNN1WDmnbktSYZ6SeZHHNhCnJSM/exec";
-    
-    let currentUser = null;
-    let masterData = [];
-    let originalMasterDataBackup = [];
-    let isMasterDataDirty = false;
-    let catalogData = [];
-    let usersListData = [];
-    let pendingApprovals = [];
-    let activeTab = 'generator';
-    let selectedMasterCatId = null;
-    let currentDecodedBaseDesc = "";
-
-    // ==========================================
-    // 1. AUTHENTICATION & NAVIGATION
-    // ==========================================
-    window.addEventListener('DOMContentLoaded', () => {
-        document.getElementById('appViews').classList.add('hidden');
-        document.getElementById('sidebar').classList.add('!hidden'); 
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistem Katalog & Generator Part Number</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .sidebar-active { background-color: #1e293b; border-left: 4px solid #3b82f6; }
         
-        const savedSession = localStorage.getItem('pn_session_v12');
-        if (savedSession) {
-            currentUser = JSON.parse(savedSession);
-            setupUserUI();
-        } else {
-            document.getElementById('authContainer').classList.remove('hidden');
+        /* CSS Khusus Fitur Print */
+        @media print {
+            body * { visibility: hidden; }
+            #printWrapper, #printWrapper * { visibility: visible; }
+            #printWrapper {
+                position: absolute; left: 0; top: 0; width: 100%;
+                background: white; padding: 20px; font-family: Arial, sans-serif;
+            }
+            table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 11px; }
+            th, td { border: 1px solid #000; padding: 8px; text-align: left; }
+            th { background-color: #f1f5f9 !important; -webkit-print-color-adjust: exact; }
+            .no-print { display: none !important; }
         }
-    });
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800 font-sans min-h-screen flex flex-col">
 
-    async function handleLogin(e) {
-        e.preventDefault();
-        const u = document.getElementById('loginUsername').value.trim();
-        const p = document.getElementById('loginPassword').value.trim();
-        showLoader("Verifikasi Akun...");
-        try {
-            const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: "login", username: u, password: p }) });
-            const result = await res.json();
-            if (result.status === "success") {
-                currentUser = result.user;
-                localStorage.setItem('pn_session_v12', JSON.stringify(currentUser));
+    <!-- OVERLAY LOADER -->
+    <div id="globalLoader" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex flex-col items-center justify-center text-white hidden">
+        <i class="fa-solid fa-circle-notch fa-spin text-4xl text-blue-400 mb-3"></i>
+        <div id="loaderText" class="text-sm font-semibold">Menghubungkan ke Server...</div>
+    </div>
+
+    <!-- WRAPPER CETAK -->
+    <div id="printWrapper" class="hidden">
+        <div class="text-center border-b-2 border-black pb-4 mb-4">
+            <h1 id="pHeaderTitle" class="text-2xl font-bold uppercase">LAPORAN KATALOG PART NUMBER</h1>
+            <p id="pHeaderSub" class="text-sm">Dokumen ini dicetak dari Sistem Master Catalog</p>
+        </div>
+        <div id="printTableContainer"></div>
+        <div class="mt-8 text-sm italic border-t border-dashed border-slate-400 pt-2" id="pFooterText"></div>
+    </div>
+
+    <!-- TOP NAVBAR -->
+    <header class="bg-slate-900 text-white shadow-md flex justify-between items-center px-6 py-3 sticky top-0 z-50">
+        <div class="flex items-center space-x-3">
+            <i class="fa-solid fa-microchip text-blue-400 text-2xl"></i>
+            <div>
+                <h1 class="font-bold text-lg leading-tight">PN-Master Catalog</h1>
+                <p class="text-xs text-slate-400">Connected to Google Sheets Database</p>
+            </div>
+        </div>
+        <div class="flex items-center space-x-4">
+            <div id="userInfo" class="text-sm text-right hidden">
+                <div id="userName" class="font-semibold text-slate-200"></div>
+                <div id="userRole" class="text-xs text-blue-400 uppercase font-bold"></div>
+            </div>
+            <button id="logoutBtn" onclick="handleLogout()" class="bg-red-600 hover:bg-red-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg hidden items-center gap-1.5">
+                <i class="fa-solid fa-right-from-bracket"></i> Keluar
+            </button>
+        </div>
+    </header>
+
+    <div class="flex flex-1 overflow-hidden relative">
+        <!-- SIDEBAR NAVIGATION -->
+        <aside id="sidebar" class="w-64 bg-slate-800 text-slate-300 flex-col justify-between hidden !hidden md:flex z-40">
+            <nav class="p-4 space-y-1">
+                <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3 px-3">Menu Utama</div>
+                <a href="#" onclick="switchTab('generator')" id="nav-generator" class="flex items-center space-x-3 px-3 py-2.5 rounded-xl transition sidebar-active text-white">
+                    <i class="fa-solid fa-wand-magic-sparkles text-blue-400 w-5"></i><span>Generator PN</span>
+                </a>
+                <a href="#" onclick="switchTab('decoder')" id="nav-decoder" class="flex items-center space-x-3 px-3 py-2.5 rounded-xl transition hover:bg-slate-700 hover:text-white">
+                    <i class="fa-solid fa-barcode text-green-400 w-5"></i><span>Decoder PN</span>
+                </a>
+                <a href="#" onclick="switchTab('catalog')" id="nav-catalog" class="flex items-center space-x-3 px-3 py-2.5 rounded-xl transition hover:bg-slate-700 hover:text-white">
+                    <i class="fa-solid fa-book text-amber-400 w-5"></i><span>Katalog Master</span>
+                </a>
+                <a href="#" onclick="switchTab('profile')" id="nav-profile" class="flex items-center space-x-3 px-3 py-2.5 rounded-xl transition hover:bg-slate-700 hover:text-white">
+                    <i class="fa-solid fa-id-card text-sky-400 w-5"></i><span>Profil Saya</span>
+                </a>
+                
+                <!-- MENU ADMIN -->
+                <div id="adminNavSection" class="pt-4 border-t border-slate-700 mt-4 hidden">
+                    <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 px-3">Admin Panel</div>
+                    <a href="#" onclick="switchTab('masterdata')" id="nav-masterdata" class="flex items-center space-x-3 px-3 py-2.5 rounded-xl transition hover:bg-slate-700 hover:text-white">
+                        <i class="fa-solid fa-database text-purple-400 w-5"></i><span>Kelola Master Data</span>
+                    </a>
+                    <a href="#" onclick="switchTab('approvals')" id="nav-approvals" class="flex items-center space-x-3 px-3 py-2.5 rounded-xl transition hover:bg-slate-700 hover:text-white">
+                        <i class="fa-solid fa-clipboard-check text-orange-400 w-5"></i><span>Persetujuan Katalog</span>
+                    </a>
+                </div>
+
+                <!-- MENU SUPERADMIN -->
+                <div id="superAdminNavSection" class="pt-4 border-t border-slate-700 mt-4 hidden">
+                    <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 px-3">Superadmin Panel</div>
+                    <a href="#" onclick="switchTab('userslist')" id="nav-userslist" class="flex items-center space-x-3 px-3 py-2.5 rounded-xl transition hover:bg-slate-700 hover:text-white">
+                        <i class="fa-solid fa-users-gear text-emerald-400 w-5"></i><span>Kelola Pengguna</span>
+                    </a>
+                </div>
+            </nav>
+        </aside>
+
+        <!-- MAIN CONTENT AREA -->
+        <main class="flex-1 p-6 overflow-y-auto" id="mainArea">
+            
+            <!-- AUTHENTICATION VIEW -->
+            <div id="authContainer" class="max-w-md mx-auto my-8 bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
+                <div class="bg-slate-900 text-white p-6 text-center">
+                    <i class="fa-solid fa-user-shield text-4xl text-blue-400 mb-2"></i>
+                    <h2 id="authTitle" class="text-xl font-bold">Masuk ke Sistem</h2>
+                </div>
+                <form id="formLogin" onsubmit="handleLogin(event)" class="p-6 space-y-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Username</label>
+                        <input type="text" id="loginUsername" required class="w-full px-3.5 py-2 border rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Password</label>
+                        <input type="password" id="loginPassword" required class="w-full px-3.5 py-2 border rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                    <div id="loginError" class="text-xs text-red-600 bg-red-50 p-2.5 rounded-xl hidden"></div>
+                    <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-xl text-sm transition shadow-md">Log In</button>
+                </form>
+            </div>
+
+            <!-- APP CONTENT -->
+            <div id="appViews" class="hidden h-full">
+
+                <!-- 1. TAB GENERATOR -->
+                <section id="view-generator" class="space-y-6">
+                    <div class="border-b border-slate-200 pb-4">
+                        <h2 class="text-2xl font-extrabold text-slate-800">Generator Part Number</h2>
+                    </div>
+                    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                        <div class="lg:col-span-7 bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-6">
+                            <select id="genCategorySelect" onchange="renderGeneratorForm()" class="w-full px-4 py-2.5 bg-slate-50 border rounded-xl text-sm font-semibold">
+                                <option value="">-- Pilih Kategori Produk --</option>
+                            </select>
+                            <div id="dynamicSegContainer" class="space-y-4"></div>
+                            
+                            <div id="extraDescContainer" class="hidden border-t pt-4 space-y-2">
+                                <label class="text-xs font-bold text-slate-700 uppercase">Deskripsi Tambahan / Catatan Khusus</label>
+                                <textarea id="genExtraDesc" rows="3" oninput="updateGeneratedPnDisplay()" placeholder="Tulis catatan tambahan di sini..." class="w-full p-3 border rounded-xl text-xs outline-none"></textarea>
+                            </div>
+                        </div>
+                        <div class="lg:col-span-5 bg-slate-900 text-white p-6 rounded-2xl shadow-xl space-y-6 sticky top-20 border border-slate-800">
+                            <div id="genPnDisplay" class="font-mono text-2xl font-black bg-slate-950/80 p-4 rounded-xl border border-slate-800 text-emerald-400 break-all text-center tracking-widest">--------------------</div>
+                            <div id="genDescDisplay" class="text-xs bg-slate-800/60 p-3 rounded-xl border text-slate-300 italic min-h-[60px] whitespace-pre-wrap">Deskripsi...</div>
+                            
+                            <div class="border-t border-slate-800 pt-4 grid grid-cols-2 gap-2 text-xs">
+                                <div class="col-span-2"><input type="text" id="catProject" placeholder="Kode / Nama Proyek" class="w-full bg-slate-800/80 border border-slate-700 rounded-lg px-3 py-2 text-white"></div>
+                                <div><input type="number" id="catStock" value="1" min="0" placeholder="Stok" class="w-full bg-slate-800/80 border border-slate-700 rounded-lg px-3 py-2 text-white"></div>
+                                <div><input type="text" id="catLocation" placeholder="Lokasi Rak" class="w-full bg-slate-800/80 border border-slate-700 rounded-lg px-3 py-2 text-white"></div>
+                                <div class="col-span-2"><input type="date" id="catDate" class="w-full bg-slate-800/80 border border-slate-700 rounded-lg px-3 py-2 text-white"></div>
+                            </div>
+                            
+                            <button onclick="saveToCatalog()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl text-sm transition">Simpan ke Sheets</button>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 2. TAB DECODER -->
+                <section id="view-decoder" class="space-y-6 hidden">
+                    <div class="border-b border-slate-200 pb-3">
+                        <h2 class="text-2xl font-extrabold text-slate-800">Decoder Part Number</h2>
+                    </div>
+                    <div class="max-w-3xl mx-auto bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+                        <div class="flex gap-2">
+                            <input type="text" id="decoderInput" maxlength="20" placeholder="Contoh: CTRA013000100PVC0000" oninput="this.value = this.value.toUpperCase()" class="flex-1 font-mono uppercase px-3.5 py-2.5 border border-slate-300 rounded-xl text-sm">
+                            <button onclick="decodePartNumber()" class="bg-green-600 hover:bg-green-700 text-white font-bold px-5 py-2.5 rounded-xl text-sm"><i class="fa-solid fa-magnifying-glass"></i> Decode</button>
+                        </div>
+                        <div id="decoderResult" class="hidden space-y-4 border-t pt-4">
+                            <div id="decoderStatus" class="p-3 rounded-xl text-sm font-semibold flex items-center gap-2"></div>
+                            <div class="space-y-1"><div class="text-xs font-bold text-slate-500 uppercase">Kategori Terdeteksi:</div><div id="decoderCategory" class="text-base font-bold text-slate-800"></div></div>
+                            <div class="overflow-x-auto rounded-xl border border-slate-200">
+                                <table class="w-full text-xs text-left border-collapse">
+                                    <thead><tr class="bg-slate-100 text-slate-600 border-b"><th class="p-2.5">Segmen</th><th class="p-2.5">Panjang</th><th class="p-2.5">Kode</th><th class="p-2.5">Arti / Keterangan</th></tr></thead>
+                                    <tbody id="decoderTableBody"></tbody>
+                                </table>
+                            </div>
+                            <div id="decoderCatalogVariations" class="hidden space-y-2 bg-amber-50 p-4 rounded-xl border border-amber-200">
+                                <div class="text-xs font-bold text-amber-900 uppercase">Variasi Deskripsi Tambahan dari Katalog:</div>
+                                <select id="decoderVarSelect" onchange="selectCatalogVariation(this.value)" class="w-full p-2 bg-white border border-amber-300 rounded-lg text-xs"></select>
+                            </div>
+                            <div class="space-y-1 bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+                                <div class="text-xs font-bold text-slate-500 uppercase">Hasil Deskripsi Lengkap:</div>
+                                <div id="decoderFullDesc" class="text-sm font-medium text-slate-800 whitespace-pre-wrap leading-relaxed"></div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 3. TAB KATALOG MASTER -->
+                <section id="view-catalog" class="space-y-6 hidden">
+                    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-slate-200 pb-3">
+                        <h2 class="text-2xl font-extrabold text-slate-800">Katalog History Part Number</h2>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <input type="text" id="catalogSearch" oninput="renderCatalogTable()" placeholder="Cari PN/Proyek..." class="px-3.5 py-2 border rounded-xl text-xs focus:ring-2 focus:ring-blue-500 outline-none">
+                            <button onclick="fetchCatalogFromCloud()" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-3.5 py-2 rounded-xl transition"><i class="fa-solid fa-rotate"></i></button>
+                            <button onclick="exportExcel()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3.5 py-2 rounded-xl transition"><i class="fa-solid fa-file-excel"></i> Export Excel</button>
+                            <button onclick="openPrintSetupModal()" class="bg-slate-700 hover:bg-slate-800 text-white text-xs font-semibold px-3.5 py-2 rounded-xl transition"><i class="fa-solid fa-print"></i> Print</button>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                        <div class="overflow-x-auto">
+                            <!-- Table ini id-nya dipanggil saat Print/Export -->
+                            <table id="catalogTable" class="w-full text-xs text-left border-collapse min-w-[800px]">
+                                <thead>
+                                    <tr class="bg-slate-800 text-white border-b">
+                                        <th class="p-3">Part Number</th>
+                                        <th class="p-3">Kategori</th>
+                                        <th class="p-3">Deskripsi Utama</th>
+                                        <th class="p-3">Proyek</th>
+                                        <th class="p-3">Stok</th>
+                                        <th class="p-3">Creator</th>
+                                        <th class="p-3 text-center no-print">Aksi</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="catalogTableBody" class="divide-y divide-slate-100"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 4. TAB PROFIL SAYA -->
+                <section id="view-profile" class="space-y-6 hidden">
+                    <div class="border-b border-slate-200 pb-3">
+                        <h2 class="text-2xl font-extrabold text-slate-800">Profil & Keamanan Akun</h2>
+                    </div>
+                    <div class="max-w-2xl mx-auto bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-6">
+                        <form id="formUserProfile" onsubmit="handleUpdateProfileSubmit(event)" class="space-y-4">
+                            <div class="grid grid-cols-2 gap-4 text-xs">
+                                <div><label class="block font-bold mb-1">Username</label><input type="text" id="profUsername" readonly class="w-full bg-slate-100 border rounded-lg px-3 py-2 font-bold text-slate-600"></div>
+                                <div><label class="block font-bold mb-1">Nama Lengkap</label><input type="text" id="profName" required class="w-full border rounded-lg px-3 py-2 outline-none"></div>
+                                <div><label class="block font-bold mb-1">Email</label><input type="email" id="profEmail" required class="w-full border rounded-lg px-3 py-2 outline-none"></div>
+                                <div><label class="block font-bold mb-1">Nomor Telefon</label><input type="tel" id="profPhone" class="w-full border rounded-lg px-3 py-2 outline-none"></div>
+                                <div class="col-span-2"><label class="block font-bold mb-1">Perusahaan</label><input type="text" id="profCompany" class="w-full border rounded-lg px-3 py-2 outline-none"></div>
+                                <div><label class="block font-bold mb-1">Divisi</label><input type="text" id="profDivision" class="w-full border rounded-lg px-3 py-2 outline-none"></div>
+                                <div><label class="block font-bold mb-1">Bagian / Section</label><input type="text" id="profDepartment" class="w-full border rounded-lg px-3 py-2 outline-none"></div>
+                            </div>
+                            <div class="border-t pt-4 space-y-3">
+                                <h4 class="text-xs font-bold text-slate-800 uppercase"><i class="fa-solid fa-key text-amber-500"></i> Ubah Password (Opsional)</h4>
+                                <div class="grid grid-cols-2 gap-3 text-xs">
+                                    <div><label class="block font-semibold mb-1">Password Baru</label><input type="password" id="profNewPass" class="w-full border rounded-lg px-3 py-2"></div>
+                                    <div><label class="block font-semibold mb-1">Konfirmasi Password</label><input type="password" id="profConfirmPass" class="w-full border rounded-lg px-3 py-2"></div>
+                                </div>
+                            </div>
+                            <div class="border-t pt-4 bg-amber-50/60 p-4 rounded-xl border border-amber-200/80 space-y-2">
+                                <label class="block text-xs font-bold text-amber-900"><i class="fa-solid fa-lock text-amber-600"></i> Verifikasi Password Saat Ini *</label>
+                                <input type="password" id="profCurrentPass" required placeholder="Masukkan password lama" class="w-full bg-white border border-amber-300 rounded-lg px-3 py-2 text-xs outline-none">
+                            </div>
+                            <div id="profError" class="text-xs text-red-600 bg-red-50 p-2.5 rounded-xl hidden"></div>
+                            <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-xl text-sm transition">Simpan Perubahan Profil</button>
+                        </form>
+                    </div>
+                </section>
+
+                <!-- 5. TAB MASTER DATA (ADMIN) -->
+                <section id="view-masterdata" class="space-y-6 hidden">
+                    <div class="flex flex-col md:flex-row justify-between border-b border-slate-200 pb-3">
+                        <div class="flex items-center gap-2">
+                            <h2 class="text-2xl font-extrabold text-slate-800">Kelola Master Data (Admin)</h2>
+                            <span id="masterDataUnsavedBadge" class="hidden text-[10px] bg-amber-500 text-white px-2.5 py-0.5 rounded-full font-bold uppercase">Ada Perubahan</span>
+                        </div>
+                        <button onclick="saveAllMasterToCloud()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3.5 py-2 rounded-xl transition">Simpan ke Sheets</button>
+                    </div>
+                    <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                        <div class="bg-white p-4 rounded-2xl border">
+                            <div class="text-xs font-bold text-slate-600 uppercase border-b pb-2 mb-2">Daftar Kategori <button onclick="createNewCategory()" class="float-right text-blue-600">+ Baru</button></div>
+                            <div id="masterCatList" class="space-y-1"></div>
+                        </div>
+                        <div class="lg:col-span-3 bg-white p-6 rounded-2xl border" id="masterEditorPanel"></div>
+                    </div>
+                </section>
+
+                <!-- 6. TAB APPROVALS (ADMIN) -->
+                <section id="view-approvals" class="space-y-6 hidden">
+                    <div class="border-b border-slate-200 pb-3">
+                        <h2 class="text-2xl font-extrabold text-slate-800">Persetujuan Edit/Hapus Katalog</h2>
+                        <p class="text-xs text-slate-500">Daftar antrean request modifikasi katalog dari pengguna.</p>
+                    </div>
+                    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                        <table class="w-full text-xs text-left border-collapse">
+                            <thead>
+                                <tr class="bg-slate-800 text-white border-b">
+                                    <th class="p-3">Requester</th>
+                                    <th class="p-3">Aksi</th>
+                                    <th class="p-3">Detail Perubahan</th>
+                                    <th class="p-3 text-center">Keputusan</th>
+                                </tr>
+                            </thead>
+                            <tbody id="approvalsTableBody" class="divide-y divide-slate-100"></tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- 7. TAB KELOLA PENGGUNA (SUPERADMIN ONLY) -->
+                <section id="view-userslist" class="space-y-6 hidden">
+                    <div class="flex justify-between border-b border-slate-200 pb-3">
+                        <h2 class="text-2xl font-extrabold text-slate-800">Pengelolaan Akun Pengguna</h2>
+                        <button onclick="fetchUsersFromCloud()" class="bg-emerald-600 text-white text-xs font-semibold px-3.5 py-2 rounded-xl"><i class="fa-solid fa-rotate"></i> Refresh</button>
+                    </div>
+                    <div class="bg-white rounded-2xl shadow-sm border overflow-hidden">
+                        <table class="w-full text-xs text-left border-collapse">
+                            <thead>
+                                <tr class="bg-slate-800 text-white border-b">
+                                    <th class="p-3">Username</th><th class="p-3">Email</th><th class="p-3">Divisi</th><th class="p-3">Role</th><th class="p-3">Status</th><th class="p-3 text-center">Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody id="usersTableBody" class="divide-y divide-slate-100"></tbody>
+                        </table>
+                    </div>
+                </section>
+
+            </div>
+        </main>
+    </div>
+
+    <!-- MODAL EDIT CATALOG ITEM -->
+    <div id="editCatalogModal" class="fixed inset-0 bg-slate-900/50 flex items-center justify-center hidden z-50">
+        <div class="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6 space-y-4">
+            <h3 class="font-bold text-slate-800" id="editModalTitle">Edit Data Katalog</h3>
+            <div id="editModalWarning" class="text-[10px] bg-amber-100 text-amber-800 p-2 rounded hidden">
+                <b>Peringatan:</b> Item ini bukan buatan Anda. Perubahan akan dikirim sebagai Request Approval ke Admin.
+            </div>
+            <input type="hidden" id="editCatId">
+            <div class="space-y-2 text-xs">
+                <label>Part Number</label>
+                <input type="text" id="editCatPn" readonly class="w-full bg-slate-100 border rounded-lg px-3 py-2 font-mono uppercase">
+                <label>Deskripsi</label>
+                <textarea id="editCatDesc" rows="2" class="w-full border rounded-lg px-3 py-2 outline-none"></textarea>
+                <label>Kode Proyek</label>
+                <input type="text" id="editCatProject" class="w-full border rounded-lg px-3 py-2 outline-none">
+            </div>
+            <div class="flex justify-end gap-2 border-t pt-3">
+                <button onclick="closeEditCatalogModal()" class="px-4 py-2 bg-slate-200 text-xs font-semibold rounded-xl">Batal</button>
+                <button onclick="saveCatalogEditSubmit()" id="btnSaveEdit" class="px-4 py-2 bg-blue-600 text-white text-xs font-semibold rounded-xl">Simpan / Request</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL EDIT USER (SUPERADMIN) -->
+    <div id="editUserModal" class="fixed inset-0 bg-slate-900/50 flex items-center justify-center hidden z-50">
+        <div class="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6 space-y-4">
+            <h3 class="font-bold text-slate-800">Edit Akun Pengguna</h3>
+            <div class="space-y-3 text-xs">
+                <div><label class="block font-bold mb-1">Username</label><input type="text" id="uEditUsername" readonly class="w-full bg-slate-100 border rounded-lg px-3 py-2 font-bold"></div>
+                <div><label class="block font-bold mb-1">Password Baru (Biarkan kosong jika tidak diubah)</label><input type="password" id="uEditPassword" class="w-full border rounded-lg px-3 py-2"></div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block font-bold mb-1">Role Akun</label>
+                        <select id="uEditRole" class="w-full border rounded-lg px-3 py-2">
+                            <option value="user">User Biasa</option><option value="admin">Admin</option><option value="superadmin">Superadmin</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block font-bold mb-1">Status Akun</label>
+                        <select id="uEditStatus" class="w-full border rounded-lg px-3 py-2">
+                            <option value="ACTIVE">ACTIVE (Aktif)</option><option value="DISABLED">DISABLED (Nonaktif)</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="flex justify-end gap-2 border-t pt-3">
+                <button onclick="document.getElementById('editUserModal').classList.add('hidden')" class="px-4 py-2 bg-slate-200 text-xs font-semibold rounded-xl">Batal</button>
+                <button onclick="saveUserEditSubmit()" class="px-4 py-2 bg-emerald-600 text-white text-xs font-semibold rounded-xl">Simpan</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL PRINT SETUP -->
+    <div id="printSetupModal" class="fixed inset-0 bg-slate-900/50 flex items-center justify-center hidden z-50">
+        <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 space-y-4">
+            <h3 class="font-bold text-slate-800 text-lg border-b pb-2">Pengaturan Cetak Dokumen</h3>
+            <div class="space-y-3 text-xs">
+                <div><label class="block font-bold mb-1">Judul Laporan</label><input type="text" id="setupPrintTitle" value="LAPORAN KATALOG PART NUMBER" class="w-full border rounded-lg px-3 py-2 outline-none"></div>
+                <div><label class="block font-bold mb-1">Sub-Judul / Instansi</label><input type="text" id="setupPrintSub" value="Divisi Engineering" class="w-full border rounded-lg px-3 py-2 outline-none"></div>
+                <div><label class="block font-bold mb-1">Teks Footer</label><input type="text" id="setupPrintFooter" value="Dokumen Rahasia & Internal" class="w-full border rounded-lg px-3 py-2 outline-none"></div>
+            </div>
+            <div class="flex justify-end gap-2 border-t pt-4">
+                <button onclick="document.getElementById('printSetupModal').classList.add('hidden')" class="px-4 py-2 bg-slate-200 text-xs font-semibold rounded-xl">Batal</button>
+                <button onclick="executePrint()" class="px-4 py-2 bg-slate-800 text-white text-xs font-semibold rounded-xl flex items-center gap-1.5"><i class="fa-solid fa-print"></i> Lanjut Cetak</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== JAVASCRIPT ==================== -->
+    <script>
+        // PENTING: GANTI URL DI BAWAH INI DENGAN URL DEPLOY APP SCRIPT ANDA SENDIRI
+        const API_URL = "https://script.google.com/macros/s/AKfycbzDfWZmfsc2XXfh61ZQo8vPurG8vmATNrqc0DnVkNN1WDmnbktSYZ6SeZHHNhCnJSM/exec";
+        
+        let currentUser = null;
+        let masterData = [];
+        let originalMasterDataBackup = [];
+        let isMasterDataDirty = false;
+        let catalogData = [];
+        let usersListData = [];
+        let pendingApprovals = [];
+        let activeTab = 'generator';
+        let selectedMasterCatId = null;
+        let currentDecodedBaseDesc = "";
+
+        // ==========================================
+        // 1. AUTHENTICATION & NAVIGATION
+        // ==========================================
+        window.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('appViews').classList.add('hidden');
+            document.getElementById('sidebar').classList.add('!hidden'); 
+            
+            const savedSession = localStorage.getItem('pn_session_v12');
+            if (savedSession) {
+                currentUser = JSON.parse(savedSession);
                 setupUserUI();
             } else {
-                const errDiv = document.getElementById('loginError');
-                errDiv.textContent = result.message;
-                errDiv.classList.remove('hidden');
-            }
-        } catch(err) { 
-            alert("Error: " + err.message); 
-        } finally { hideLoader(); }
-    }
-
-    function handleLogout() {
-        if (isMasterDataDirty && !confirm("Ada perubahan Master Data yang belum disimpan. Yakin ingin keluar?")) return;
-        currentUser = null;
-        localStorage.removeItem('pn_session_v12');
-        location.reload();
-    }
-
-    function setupUserUI() {
-        document.getElementById('authContainer').classList.add('hidden');
-        document.getElementById('appViews').classList.remove('hidden');
-        document.getElementById('sidebar').classList.remove('!hidden');
-        document.getElementById('userInfo').classList.remove('hidden');
-        document.getElementById('logoutBtn').classList.remove('hidden');
-        document.getElementById('logoutBtn').style.display = 'flex';
-        document.getElementById('userName').textContent = currentUser.name;
-        document.getElementById('userRole').textContent = currentUser.role;
-        
-        if (['admin', 'superadmin'].includes(currentUser.role)) {
-            document.getElementById('adminNavSection').classList.remove('hidden');
-        }
-        if (currentUser.role === 'superadmin') {
-            const suNav = document.getElementById('superAdminNavSection');
-            if(suNav) suNav.classList.remove('hidden');
-        }
-
-        fetchMasterFromCloud();
-        switchTab('generator');
-    }
-
-    function switchTab(tab) {
-        if ((!['admin','superadmin'].includes(currentUser.role)) && (tab === 'masterdata' || tab === 'approvals')) {
-            alert('Akses ditolak!'); return;
-        }
-        activeTab = tab;
-        ['generator', 'decoder', 'catalog', 'masterdata', 'approvals'].forEach(t => {
-            const view = document.getElementById(`view-${t}`);
-            const nav = document.getElementById(`nav-${t}`);
-            if (view) view.classList.toggle('hidden', t !== tab);
-            if (nav) {
-                if (t === tab) nav.classList.add('sidebar-active', 'text-white');
-                else nav.classList.remove('sidebar-active', 'text-white');
+                document.getElementById('authContainer').classList.remove('hidden');
             }
         });
 
-        if (tab === 'catalog') fetchCatalogFromCloud();
-        if (tab === 'masterdata') renderMasterDataPanel();
-        if (tab === 'approvals') fetchPendingApprovals();
-    }
-
-    function showLoader(txt) { 
-        document.getElementById('loaderText').textContent=txt; 
-        document.getElementById('globalLoader').classList.remove('hidden'); 
-    }
-    function hideLoader() { document.getElementById('globalLoader').classList.add('hidden'); }
-    function setMasterDataDirty(dirty) {
-        isMasterDataDirty = dirty;
-        const badge = document.getElementById('masterDataUnsavedBadge');
-        if (badge) badge.classList.toggle('hidden', !dirty);
-    }
-    function copyToClipboard(text, msg = "Tersalin!") {
-        navigator.clipboard.writeText(text).then(() => alert(msg)).catch(e => alert("Gagal: " + e));
-    }
-
-    // ==========================================
-    // 2. GENERATOR PART NUMBER
-    // ==========================================
-    async function fetchMasterFromCloud() {
-        showLoader("Load Master Data...");
-        try {
-            const res = await fetch(`${API_URL}?action=getMasterData`);
-            masterData = await res.json();
-            originalMasterDataBackup = JSON.parse(JSON.stringify(masterData));
-            initCategoryDropdowns();
-        } catch(e) { console.error(e); } finally { hideLoader(); renderGeneratorForm(); }
-    }
-
-    function initCategoryDropdowns() {
-        const select = document.getElementById('genCategorySelect');
-        select.innerHTML = '<option value="">-- Pilih Kategori Produk --</option>';
-        masterData.forEach(cat => {
-            select.innerHTML += `<option value="${cat.id}">[${cat.prefix}] ${cat.name}</option>`;
-        });
-    }
-
-    function renderGeneratorForm() {
-        const catId = document.getElementById('genCategorySelect').value;
-        const container = document.getElementById('dynamicSegContainer');
-        const extraContainer = document.getElementById('extraDescContainer');
-        const extraInput = document.getElementById('genExtraDesc');
-        container.innerHTML = '';
-        if(extraInput) extraInput.value = '';
-
-        if (!catId) {
-            container.innerHTML = `<div class="text-center py-10 px-4 bg-slate-50/50 rounded-2xl border border-dashed text-slate-400">Pilih Kategori Produk di atas</div>`;
-            if(extraContainer) extraContainer.classList.add('hidden');
-            updateGeneratedPnDisplay();
-            return;
+        async function handleLogin(e) {
+            e.preventDefault();
+            const u = document.getElementById('loginUsername').value.trim();
+            const p = document.getElementById('loginPassword').value.trim();
+            showLoader("Verifikasi Akun...");
+            try {
+                const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: "login", username: u, password: p }) });
+                const result = await res.json();
+                if (result.status === "success") {
+                    currentUser = result.user;
+                    localStorage.setItem('pn_session_v12', JSON.stringify(currentUser));
+                    setupUserUI();
+                } else {
+                    const errDiv = document.getElementById('loginError');
+                    errDiv.textContent = result.message;
+                    errDiv.classList.remove('hidden');
+                }
+            } catch(err) { alert("Error: " + err.message); } finally { hideLoader(); }
         }
 
-        const category = masterData.find(c => c.id === catId);
-        if(extraContainer) extraContainer.classList.toggle('hidden', !category.enableExtraDesc);
+        function handleLogout() {
+            if (isMasterDataDirty && !confirm("Ada perubahan Master Data yang belum disimpan. Yakin ingin keluar?")) return;
+            currentUser = null;
+            localStorage.removeItem('pn_session_v12');
+            location.reload();
+        }
 
-        category.segments.forEach((seg, idx) => {
-            const segDiv = document.createElement('div');
-            segDiv.className = "p-4 bg-slate-50/80 border rounded-xl space-y-2.5";
-            segDiv.innerHTML = `
-                <div class="flex justify-between items-center text-xs font-bold text-slate-700">
-                    <span><span class="w-4 h-4 bg-slate-200 rounded-full inline-flex items-center justify-center text-[10px] mr-1">${idx + 1}</span> ${seg.name} (${seg.length} digit)</span>
-                    ${seg.allowCustom ? '<span class="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-md">Bisa Custom Input</span>' : ''}
-                </div>
-                <select id="gen_seg_${seg.id}" onchange="handleSegmentChange('${catId}', ${idx})" class="w-full px-3 py-2 border rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-mono font-semibold"></select>
-                <input type="text" id="gen_custom_${seg.id}" maxlength="${seg.length}" placeholder="Atau ketik custom..." class="hidden w-full mt-2 px-3 py-2 border rounded-xl text-xs font-mono uppercase bg-blue-50 focus:ring-2 focus:ring-blue-500 font-bold" oninput="this.value=this.value.toUpperCase(); updateGeneratedPnDisplay();">
-            `;
-            container.appendChild(segDiv);
-        });
+        function setupUserUI() {
+            document.getElementById('authContainer').classList.add('hidden');
+            document.getElementById('appViews').classList.remove('hidden');
+            document.getElementById('sidebar').classList.remove('!hidden');
+            document.getElementById('userInfo').classList.remove('hidden');
+            document.getElementById('logoutBtn').classList.remove('hidden');
+            document.getElementById('logoutBtn').style.display = 'flex';
+            document.getElementById('userName').textContent = currentUser.name;
+            document.getElementById('userRole').textContent = currentUser.role;
+            
+            if (['admin', 'superadmin'].includes(currentUser.role)) {
+                document.getElementById('adminNavSection').classList.remove('hidden');
+            }
+            if (currentUser.role === 'superadmin') {
+                const suNav = document.getElementById('superAdminNavSection');
+                if(suNav) suNav.classList.remove('hidden');
+            }
 
-        populateSegmentOptions(catId, 0);
-    }
+            fetchMasterFromCloud();
+            loadProfileView();
+            switchTab('generator');
+        }
 
-    function populateSegmentOptions(catId, segIndex) {
-        const category = masterData.find(c => c.id === catId);
-        if (!category || segIndex >= category.segments.length) return;
-        const seg = category.segments[segIndex];
-        const select = document.getElementById(`gen_seg_${seg.id}`);
-        if (!select) return;
+        function switchTab(tab) {
+            if ((!['admin','superadmin'].includes(currentUser.role)) && (tab === 'masterdata' || tab === 'approvals')) {
+                alert('Akses ditolak!'); return;
+            }
+            if (currentUser.role !== 'superadmin' && tab === 'userslist') {
+                alert('Akses ditolak!'); return;
+            }
+            activeTab = tab;
+            ['generator', 'decoder', 'catalog', 'profile', 'masterdata', 'approvals', 'userslist'].forEach(t => {
+                const view = document.getElementById(`view-${t}`);
+                const nav = document.getElementById(`nav-${t}`);
+                if (view) view.classList.toggle('hidden', t !== tab);
+                if (nav) {
+                    if (t === tab) nav.classList.add('sidebar-active', 'text-white');
+                    else nav.classList.remove('sidebar-active', 'text-white');
+                }
+            });
 
-        let allowedCodes = null;
+            if (tab === 'catalog') fetchCatalogFromCloud();
+            if (tab === 'masterdata') renderMasterDataPanel();
+            if (tab === 'approvals') fetchPendingApprovals();
+            if (tab === 'userslist') fetchUsersFromCloud();
+        }
 
-        // EVALUASI ATURAN KETERKAITAN (COMPOSITE KEY)
-        if (segIndex > 0) {
-            for (let pIdx = 0; pIdx < segIndex; pIdx++) {
-                const parentSeg = category.segments[pIdx];
-                const parentSelect = document.getElementById(`gen_seg_${parentSeg.id}`);
-                const parentVal = parentSelect ? parentSelect.value.toUpperCase() : null;
+        function showLoader(txt) { document.getElementById('loaderText').textContent=txt; document.getElementById('globalLoader').classList.remove('hidden'); }
+        function hideLoader() { document.getElementById('globalLoader').classList.add('hidden'); }
+        function setMasterDataDirty(dirty) {
+            isMasterDataDirty = dirty;
+            const badge = document.getElementById('masterDataUnsavedBadge');
+            if (badge) badge.classList.toggle('hidden', !dirty);
+        }
 
-                if (parentVal && category.conditionalRules) {
-                    const ruleKey = `${parentSeg.id}_${parentVal}`; // Contoh: s4_01
-                    if (Array.isArray(category.conditionalRules[ruleKey])) {
-                        // Ambil aturan hanya untuk segmen yang sedang di-evaluate
-                        const rulesForThisSeg = category.conditionalRules[ruleKey].filter(k => k.startsWith(`${seg.id}_`));
-                        
-                        if (rulesForThisSeg.length > 0) {
-                            const rawCodes = rulesForThisSeg.map(k => k.replace(`${seg.id}_`, ''));
-                            if (allowedCodes === null) allowedCodes = [...rawCodes];
-                            else allowedCodes = allowedCodes.filter(c => rawCodes.includes(c));
+        // ==========================================
+        // 2. PROFIL PENGGUNA
+        // ==========================================
+        function loadProfileView() {
+            if (!currentUser) return;
+            document.getElementById('profUsername').value = currentUser.username;
+            document.getElementById('profName').value = currentUser.name || currentUser.username;
+            document.getElementById('profEmail').value = currentUser.email || '';
+            document.getElementById('profPhone').value = currentUser.phone || '';
+            document.getElementById('profCompany').value = currentUser.company || '';
+            document.getElementById('profDivision').value = currentUser.division || '';
+            document.getElementById('profDepartment').value = currentUser.department || '';
+
+            document.getElementById('profCurrentPass').value = '';
+            document.getElementById('profNewPass').value = '';
+            document.getElementById('profConfirmPass').value = '';
+            document.getElementById('profError').classList.add('hidden');
+        }
+
+        async function handleUpdateProfileSubmit(e) {
+            e.preventDefault();
+            const errDiv = document.getElementById('profError'); errDiv.classList.add('hidden');
+            const currentPass = document.getElementById('profCurrentPass').value.trim();
+            const newPass = document.getElementById('profNewPass').value.trim();
+            const confirmPass = document.getElementById('profConfirmPass').value.trim();
+
+            if (!currentPass) { errDiv.textContent = "Password saat ini wajib diisi!"; errDiv.classList.remove('hidden'); return; }
+            if (newPass || confirmPass) {
+                if (newPass !== confirmPass) { errDiv.textContent = "Konfirmasi password baru tidak cocok!"; errDiv.classList.remove('hidden'); return; }
+            }
+
+            const payload = {
+                username: currentUser.username, currentPassword: currentPass, newPassword: newPass, confirmPassword: confirmPass,
+                name: document.getElementById('profName').value.trim(), email: document.getElementById('profEmail').value.trim(),
+                phone: document.getElementById('profPhone').value.trim(), company: document.getElementById('profCompany').value.trim(),
+                division: document.getElementById('profDivision').value.trim(), department: document.getElementById('profDepartment').value.trim()
+            };
+
+            showLoader("Memperbarui Profil...");
+            try {
+                const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: "updateUserProfile", userData: payload }) });
+                const result = await res.json();
+                if (result.status === "success") {
+                    alert(result.message);
+                    currentUser = result.user;
+                    localStorage.setItem('pn_session_v12', JSON.stringify(currentUser));
+                    document.getElementById('userName').textContent = currentUser.name;
+                    loadProfileView();
+                } else {
+                    errDiv.textContent = result.message; errDiv.classList.remove('hidden');
+                }
+            } catch (err) { errDiv.textContent = "Error: " + err.message; errDiv.classList.remove('hidden'); } finally { hideLoader(); }
+        }
+
+        // ==========================================
+        // 3. GENERATOR & DECODER
+        // ==========================================
+        async function fetchMasterFromCloud() {
+            showLoader("Load Master Data...");
+            try {
+                const res = await fetch(`${API_URL}?action=getMasterData`);
+                masterData = await res.json();
+                originalMasterDataBackup = JSON.parse(JSON.stringify(masterData));
+                initCategoryDropdowns();
+            } catch(e) { console.error(e); } finally { hideLoader(); renderGeneratorForm(); }
+        }
+
+        function initCategoryDropdowns() {
+            const select = document.getElementById('genCategorySelect');
+            select.innerHTML = '<option value="">-- Pilih Kategori Produk --</option>';
+            masterData.forEach(cat => { select.innerHTML += `<option value="${cat.id}">[${cat.prefix}] ${cat.name}</option>`; });
+        }
+
+        function renderGeneratorForm() {
+            const catId = document.getElementById('genCategorySelect').value;
+            const container = document.getElementById('dynamicSegContainer');
+            const extraContainer = document.getElementById('extraDescContainer');
+            const extraInput = document.getElementById('genExtraDesc');
+            container.innerHTML = ''; if(extraInput) extraInput.value = '';
+
+            if (!catId) {
+                container.innerHTML = `<div class="text-center py-10 px-4 bg-slate-50/50 rounded-2xl border border-dashed text-slate-400">Pilih Kategori Produk di atas</div>`;
+                if(extraContainer) extraContainer.classList.add('hidden');
+                updateGeneratedPnDisplay(); return;
+            }
+
+            const category = masterData.find(c => c.id === catId);
+            if(extraContainer) extraContainer.classList.toggle('hidden', !category.enableExtraDesc);
+
+            category.segments.forEach((seg, idx) => {
+                const segDiv = document.createElement('div');
+                segDiv.className = "p-4 bg-slate-50/80 border rounded-xl space-y-2.5";
+                segDiv.innerHTML = `
+                    <div class="flex justify-between items-center text-xs font-bold text-slate-700">
+                        <span><span class="w-4 h-4 bg-slate-200 rounded-full inline-flex items-center justify-center text-[10px] mr-1">${idx + 1}</span> ${seg.name} (${seg.length} digit)</span>
+                        ${seg.allowCustom ? '<span class="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-md">Bisa Custom Input</span>' : ''}
+                    </div>
+                    <select id="gen_seg_${seg.id}" onchange="handleSegmentChange('${catId}', ${idx})" class="w-full px-3 py-2 border rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 font-mono font-semibold"></select>
+                    <input type="text" id="gen_custom_${seg.id}" maxlength="${seg.length}" placeholder="Atau ketik custom..." class="hidden w-full mt-2 px-3 py-2 border rounded-xl text-xs font-mono uppercase bg-blue-50 focus:ring-2 focus:ring-blue-500 font-bold" oninput="this.value=this.value.toUpperCase(); updateGeneratedPnDisplay();">
+                `;
+                container.appendChild(segDiv);
+            });
+            populateSegmentOptions(catId, 0);
+        }
+
+        function populateSegmentOptions(catId, segIndex) {
+            const category = masterData.find(c => c.id === catId);
+            if (!category || segIndex >= category.segments.length) return;
+            const seg = category.segments[segIndex];
+            const select = document.getElementById(`gen_seg_${seg.id}`);
+            if (!select) return;
+
+            let allowedCodes = null;
+            if (segIndex > 0) {
+                for (let pIdx = 0; pIdx < segIndex; pIdx++) {
+                    const parentSeg = category.segments[pIdx];
+                    const parentSelect = document.getElementById(`gen_seg_${parentSeg.id}`);
+                    const parentVal = parentSelect ? parentSelect.value.toUpperCase() : null;
+
+                    if (parentVal && category.conditionalRules) {
+                        const ruleKey = `${parentSeg.id}_${parentVal}`;
+                        if (Array.isArray(category.conditionalRules[ruleKey])) {
+                            const rulesForThisSeg = category.conditionalRules[ruleKey].filter(k => k.startsWith(`${seg.id}_`));
+                            if (rulesForThisSeg.length > 0) {
+                                const rawCodes = rulesForThisSeg.map(k => k.replace(`${seg.id}_`, ''));
+                                if (allowedCodes === null) allowedCodes = [...rawCodes];
+                                else allowedCodes = allowedCodes.filter(c => rawCodes.includes(c));
+                            }
                         }
                     }
                 }
             }
-        }
 
-        select.innerHTML = '<option value="">-- Pilih --</option>';
-        seg.options.forEach(opt => {
-            const upperCode = opt.code ? opt.code.toUpperCase() : "";
-            if (allowedCodes === null || allowedCodes.includes(upperCode)) {
-                select.innerHTML += `<option value="${upperCode}">[${upperCode}] ${opt.label}</option>`;
-            }
-        });
-
-        if (seg.allowCustom) {
-            select.innerHTML += `<option value="__CUSTOM__">-- ISI CUSTOM VALUE --</option>`;
-        }
-        if (select.options.length > 1) select.selectedIndex = 1;
-
-        handleSegmentChange(catId, segIndex);
-    }
-
-    function handleSegmentChange(catId, segIndex) {
-        const category = masterData.find(c => c.id === catId);
-        const seg = category.segments[segIndex];
-        const select = document.getElementById(`gen_seg_${seg.id}`);
-        const customInput = document.getElementById(`gen_custom_${seg.id}`);
-
-        if (seg.allowCustom && customInput) {
-            customInput.classList.toggle('hidden', select.value !== "__CUSTOM__");
-            if(select.value !== "__CUSTOM__") customInput.value = '';
-        }
-
-        if (segIndex + 1 < category.segments.length) populateSegmentOptions(catId, segIndex + 1);
-        else updateGeneratedPnDisplay();
-    }
-
-    function resolveDescTemplate(category, selectedCodeMap) {
-        if (category.descRules && category.descRules.length > 0) {
-            for (let rule of category.descRules) {
-                if (selectedCodeMap[rule.segmentId] && selectedCodeMap[rule.segmentId].toUpperCase() === rule.triggerCode.toUpperCase()) {
-                    return rule.template;
+            select.innerHTML = '<option value="">-- Pilih --</option>';
+            seg.options.forEach(opt => {
+                const upperCode = opt.code ? opt.code.toUpperCase() : "";
+                if (allowedCodes === null || allowedCodes.includes(upperCode)) {
+                    select.innerHTML += `<option value="${upperCode}">[${upperCode}] ${opt.label}</option>`;
                 }
-            }
-        }
-        return category.descTemplate;
-    }
+            });
 
-    function cleanDescriptionString(str) {
-        return str.replace(/,\s*,/g, ',').replace(/,\s*$/g, '').replace(/^\s*,\s*/g, '').replace(/\s+/g, ' ').trim();
-    }
+            if (seg.allowCustom) select.innerHTML += `<option value="__CUSTOM__">-- ISI CUSTOM VALUE --</option>`;
+            if (select.options.length > 1) select.selectedIndex = 1;
 
-    function updateGeneratedPnDisplay() {
-        const catId = document.getElementById('genCategorySelect').value;
-        const pnDisplay = document.getElementById('genPnDisplay');
-        const pnLength = document.getElementById('genPnLength');
-        const descDisplay = document.getElementById('genDescDisplay');
-
-        if (!catId) {
-            pnDisplay.textContent = "--------------------";
-            if(pnLength) pnLength.textContent = "0 / 20";
-            descDisplay.textContent = "Deskripsi otomatis...";
-            return;
+            handleSegmentChange(catId, segIndex);
         }
 
-        const category = masterData.find(c => c.id === catId);
-        let rawPn = "";
-        let descValues = {};
-        let selectedCodeMap = {};
-
-        category.segments.forEach(seg => {
+        function handleSegmentChange(catId, segIndex) {
+            const category = masterData.find(c => c.id === catId);
+            const seg = category.segments[segIndex];
             const select = document.getElementById(`gen_seg_${seg.id}`);
             const customInput = document.getElementById(`gen_custom_${seg.id}`);
-            let codeVal = "", labelVal = "";
 
-            if (select) {
-                if (select.value === "__CUSTOM__" && customInput) {
-                    let userVal = customInput.value.trim().toUpperCase();
-                    if (userVal) {
-                        codeVal = /^\d+$/.test(userVal) ? userVal.padStart(seg.length, '0').slice(-seg.length) : userVal.padEnd(seg.length, '0').slice(0, seg.length);
-                        labelVal = userVal;
+            if (seg.allowCustom && customInput) {
+                customInput.classList.toggle('hidden', select.value !== "__CUSTOM__");
+                if(select.value !== "__CUSTOM__") customInput.value = '';
+            }
+
+            if (segIndex + 1 < category.segments.length) populateSegmentOptions(catId, segIndex + 1);
+            else updateGeneratedPnDisplay();
+        }
+
+        function updateGeneratedPnDisplay() {
+            const catId = document.getElementById('genCategorySelect').value;
+            const pnDisplay = document.getElementById('genPnDisplay');
+            const descDisplay = document.getElementById('genDescDisplay');
+
+            if (!catId) {
+                pnDisplay.textContent = "--------------------";
+                descDisplay.textContent = "Deskripsi otomatis...";
+                return;
+            }
+
+            const category = masterData.find(c => c.id === catId);
+            let rawPn = ""; let descValues = {}; let selectedCodeMap = {};
+
+            category.segments.forEach(seg => {
+                const select = document.getElementById(`gen_seg_${seg.id}`);
+                const customInput = document.getElementById(`gen_custom_${seg.id}`);
+                let codeVal = "", labelVal = "";
+
+                if (select) {
+                    if (select.value === "__CUSTOM__" && customInput) {
+                        let userVal = customInput.value.trim().toUpperCase();
+                        if (userVal) {
+                            codeVal = /^\d+$/.test(userVal) ? userVal.padStart(seg.length, '0').slice(-seg.length) : userVal.padEnd(seg.length, '0').slice(0, seg.length);
+                            labelVal = userVal;
+                        } else { codeVal = "-".repeat(seg.length); labelVal = "..."; }
+                        selectedCodeMap[seg.id] = codeVal;
+                    } else if (select.value) {
+                        codeVal = select.value.toUpperCase();
+                        selectedCodeMap[seg.id] = codeVal;
+                        const matchedOpt = seg.options.find(o => o.code.toUpperCase() === select.value.toUpperCase());
+                        labelVal = (matchedOpt && matchedOpt.showInDesc === false) ? "" : (matchedOpt ? (matchedOpt.desc || matchedOpt.label) : select.value);
                     } else {
-                        codeVal = "-".repeat(seg.length);
-                        labelVal = "...";
+                        codeVal = "-".repeat(seg.length); labelVal = "..."; selectedCodeMap[seg.id] = "";
                     }
-                    selectedCodeMap[seg.id] = codeVal;
-                } else if (select.value) {
-                    codeVal = select.value.toUpperCase();
-                    selectedCodeMap[seg.id] = codeVal;
-                    const matchedOpt = seg.options.find(o => o.code.toUpperCase() === select.value.toUpperCase());
-                    labelVal = (matchedOpt && matchedOpt.showInDesc === false) ? "" : (matchedOpt ? (matchedOpt.desc || matchedOpt.label) : select.value);
-                } else {
-                    codeVal = "-".repeat(seg.length);
-                    labelVal = "...";
-                    selectedCodeMap[seg.id] = "";
+                }
+                rawPn += codeVal; descValues[seg.name] = labelVal;
+            });
+
+            pnDisplay.textContent = rawPn.slice(0, 20).toUpperCase();
+
+            let activeTemplate = category.descTemplate;
+            if (category.descRules && category.descRules.length > 0) {
+                for (let rule of category.descRules) {
+                    if (selectedCodeMap[rule.segmentId] && selectedCodeMap[rule.segmentId].toUpperCase() === rule.triggerCode.toUpperCase()) {
+                        activeTemplate = rule.template; break;
+                    }
                 }
             }
-            rawPn += codeVal;
-            descValues[seg.name] = labelVal;
-        });
 
-        const finalPn = rawPn.slice(0, 20).toUpperCase();
-        pnDisplay.textContent = finalPn;
-        if(pnLength) pnLength.textContent = `${finalPn.length} / 20`;
+            let descStr = activeTemplate;
+            Object.keys(descValues).forEach(key => { descStr = descStr.replace(new RegExp(`\\{${key}\\}`, 'g'), descValues[key]); });
+            let finalMainDesc = descStr.replace(/,\s*,/g, ',').replace(/,\s*$/g, '').replace(/^\s*,\s*/g, '').replace(/\s+/g, ' ').trim();
 
-        let activeTemplate = resolveDescTemplate(category, selectedCodeMap);
-        let descStr = activeTemplate;
-        Object.keys(descValues).forEach(key => {
-            descStr = descStr.replace(new RegExp(`\\{${key}\\}`, 'g'), descValues[key]);
-        });
-
-        let finalMainDesc = cleanDescriptionString(descStr);
-        const extraInput = document.getElementById('genExtraDesc');
-        if (category.enableExtraDesc && extraInput && extraInput.value.trim()) {
-            finalMainDesc += "\n\n[Keterangan Tambahan]:\n" + extraInput.value.trim();
-        }
-        descDisplay.textContent = finalMainDesc;
-    }
-
-    async function saveToCatalog() {
-        const catId = document.getElementById('genCategorySelect').value;
-        if (!catId) return alert('Pilih kategori!');
-        const pn = document.getElementById('genPnDisplay').textContent.trim();
-        if (pn.includes('-')) return alert('Lengkapi semua segmen digit!');
-
-        const category = masterData.find(c => c.id === catId);
-        const extraInput = document.getElementById('genExtraDesc');
-        const extraText = extraInput ? extraInput.value.trim() : "";
-
-        if (category.enableExtraDesc && category.extraDescRequired && !extraText) {
-            return alert('Kategori ini mewajibkan Deskripsi Tambahan!');
+            const extraInput = document.getElementById('genExtraDesc');
+            if (category.enableExtraDesc && extraInput && extraInput.value.trim()) finalMainDesc += "\n\n[Keterangan Tambahan]:\n" + extraInput.value.trim();
+            descDisplay.textContent = finalMainDesc;
         }
 
-        let mainDesc = document.getElementById('genDescDisplay').textContent.trim();
-        if (extraText && mainDesc.includes("[Keterangan Tambahan]:")) {
-            mainDesc = mainDesc.split("[Keterangan Tambahan]:")[0].trim();
+        async function saveToCatalog() {
+            const catId = document.getElementById('genCategorySelect').value;
+            if (!catId) return alert('Pilih kategori!');
+            const pn = document.getElementById('genPnDisplay').textContent.trim();
+            if (pn.includes('-')) return alert('Lengkapi semua segmen digit!');
+
+            const category = masterData.find(c => c.id === catId);
+            const extraInput = document.getElementById('genExtraDesc');
+            const extraText = extraInput ? extraInput.value.trim() : "";
+            if (category.enableExtraDesc && category.extraDescRequired && !extraText) return alert('Kategori ini mewajibkan Deskripsi Tambahan!');
+
+            let mainDesc = document.getElementById('genDescDisplay').textContent.trim();
+            if (extraText && mainDesc.includes("[Keterangan Tambahan]:")) mainDesc = mainDesc.split("[Keterangan Tambahan]:")[0].trim();
+
+            const newItem = {
+                id: "item_" + Date.now(), pn: pn, categoryName: category.name, description: mainDesc, extraDescription: extraText,
+                project: document.getElementById('catProject').value.trim() || 'GENERAL', stock: document.getElementById('catStock').value || 1,
+                location: document.getElementById('catLocation').value || '', date: document.getElementById('catDate').value || new Date().toISOString().split('T')[0]
+            };
+
+            showLoader("Menyimpan ke Sheets...");
+            try {
+                await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: "addCatalogItem", requesterUsername: currentUser.username, data: newItem }) });
+                alert("Berhasil disimpan!"); switchTab('catalog');
+            } catch(e) { alert("Error: "+e); } finally { hideLoader(); }
         }
 
-        const proj = document.getElementById('catProject').value.trim() || 'GENERAL';
-        const dateInput = document.getElementById('catDate').value;
-        
-        const newItem = {
-            id: "item_" + Date.now(),
-            pn: pn,
-            categoryName: category.name,
-            description: mainDesc,
-            extraDescription: extraText,
-            project: proj,
-            stock: document.getElementById('catStock').value || 1,
-            location: document.getElementById('catLocation').value || '',
-            date: dateInput ? dateInput : new Date().toISOString().split('T')[0]
-        };
+        async function decodePartNumber() {
+            const inputPn = document.getElementById('decoderInput').value.trim().toUpperCase();
+            const resultBox = document.getElementById('decoderResult');
+            const statusDiv = document.getElementById('decoderStatus');
+            const tableBody = document.getElementById('decoderTableBody');
+            
+            if (!inputPn) return alert('Masukkan Part Number terlebih dahulu.');
+            resultBox.classList.remove('hidden'); document.getElementById('decoderCatalogVariations').classList.add('hidden');
+            
+            const prefix = inputPn.slice(0, 4);
+            const matchedCat = masterData.find(c => c.prefix.toUpperCase() === prefix);
 
-        showLoader("Menyimpan ke Sheets...");
-        try {
-            await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: "addCatalogItem", requesterUsername: currentUser.username, data: newItem }) });
-            alert("Berhasil disimpan!");
-            switchTab('catalog');
-        } catch(e) { alert("Error: "+e); } finally { hideLoader(); }
-    }
-
-    // ==========================================
-    // 3. CATALOG, APPROVAL, EXPORT, PRINT
-    // ==========================================
-    async function fetchCatalogFromCloud() {
-        showLoader("Load Katalog...");
-        try {
-            const res = await fetch(`${API_URL}?action=getCatalogData`);
-            catalogData = await res.json();
-            renderCatalogTable();
-        } catch(e) {} finally { hideLoader(); }
-    }
-
-    function renderCatalogTable() {
-        const tbody = document.getElementById('catalogTableBody');
-        const search = document.getElementById('catalogSearch').value.toLowerCase();
-        tbody.innerHTML = '';
-        
-        catalogData.filter(i => (i.pn||"").toLowerCase().includes(search) || (i.project||"").toLowerCase().includes(search))
-        .forEach(item => {
-            const canDirectEdit = currentUser.username === item.creator || ['admin','superadmin'].includes(currentUser.role);
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td class="p-3 font-mono font-bold">${item.pn}</td>
-                <td class="p-3">${item.categoryName}</td>
-                <td class="p-3 text-[11px]">${item.description}</td>
-                <td class="p-3">${item.project}</td>
-                <td class="p-3">${item.stock}</td>
-                <td class="p-3 text-[10px] text-blue-600 font-bold">${item.creator || 'admin'}</td>
-                <td class="p-3 text-center no-print">
-                    <button onclick="openEditCatalogModal('${item.id}')" class="text-${canDirectEdit ? 'blue' : 'amber'}-600 px-2 text-lg" title="${canDirectEdit ? 'Edit Data' : 'Request Edit'}"><i class="fa-solid fa-pen-to-square"></i></button>
-                    <button onclick="requestDeleteCatalog('${item.id}')" class="text-red-600 px-2 text-lg"><i class="fa-solid fa-trash"></i></button>
-                </td>
-            `;
-            tbody.appendChild(tr);
-        });
-    }
-
-    function openEditCatalogModal(id) {
-        const item = catalogData.find(i => i.id === id);
-        document.getElementById('editCatId').value = item.id;
-        document.getElementById('editCatPn').value = item.pn;
-        document.getElementById('editCatDesc').value = item.description;
-        document.getElementById('editCatProject').value = item.project;
-        
-        const isOwner = currentUser.username === item.creator || ['admin','superadmin'].includes(currentUser.role);
-        document.getElementById('editModalWarning').classList.toggle('hidden', isOwner);
-        document.getElementById('btnSaveEdit').textContent = isOwner ? 'Simpan Langsung' : 'Kirim Request Approval';
-        
-        document.getElementById('editCatalogModal').classList.remove('hidden');
-    }
-
-    function closeEditCatalogModal() { document.getElementById('editCatalogModal').classList.add('hidden'); }
-
-    async function saveCatalogEditSubmit() {
-        const id = document.getElementById('editCatId').value;
-        const item = catalogData.find(i => i.id === id);
-        const newData = { id: id, description: document.getElementById('editCatDesc').value, project: document.getElementById('editCatProject').value };
-        
-        const isOwner = currentUser.username === item.creator || ['admin','superadmin'].includes(currentUser.role);
-        
-        showLoader("Memproses...");
-        try {
-            if (isOwner) {
-                await fetch(API_URL, { method:'POST', body: JSON.stringify({ action: "updateCatalogItem", requesterUsername: currentUser.username, data: newData }) });
-                alert("Berhasil diperbarui langsung!");
-            } else {
-                await fetch(API_URL, { method:'POST', body: JSON.stringify({ action: "requestApproval", requesterUsername: currentUser.username, data: { type: "EDIT", catalogId: id, targetData: newData } }) });
-                alert("Request Edit berhasil dikirim ke Admin!");
+            if (!matchedCat) {
+                statusDiv.className = "p-3 rounded-xl text-sm font-semibold bg-red-100 text-red-700"; statusDiv.innerHTML = `Kategori tidak ditemukan untuk prefix "${prefix}"`;
+                document.getElementById('decoderCategory').textContent = "-"; tableBody.innerHTML = ""; document.getElementById('decoderFullDesc').textContent = "-"; return;
             }
-            closeEditCatalogModal();
-            fetchCatalogFromCloud();
-        } catch(e) {} finally { hideLoader(); }
-    }
 
-    async function requestDeleteCatalog(id) {
-        const item = catalogData.find(i => i.id === id);
-        const isOwner = currentUser.username === item.creator || ['admin','superadmin'].includes(currentUser.role);
-        
-        if(confirm(`Yakin ingin menghapus ${item.pn}?`)) {
+            statusDiv.className = "p-3 rounded-xl text-sm font-semibold bg-emerald-100 text-emerald-800"; statusDiv.innerHTML = `Part Number Valid Terdeko (Prefix: ${prefix})`;
+            document.getElementById('decoderCategory').textContent = matchedCat.name;
+
+            let currIdx = 0; let descValues = {}; let selectedCodeMap = {}; tableBody.innerHTML = "";
+
+            matchedCat.segments.forEach(seg => {
+                const segCode = inputPn.slice(currIdx, currIdx + seg.length).toUpperCase();
+                currIdx += seg.length; selectedCodeMap[seg.id] = segCode;
+
+                let optLabel = "Custom / Non-Standard Value"; let optDesc = segCode;
+                const matchedOpt = seg.options.find(o => o.code.toUpperCase() === segCode);
+                if (matchedOpt) { optLabel = matchedOpt.label; optDesc = matchedOpt.showInDesc === false ? "" : (matchedOpt.desc || matchedOpt.label); }
+                descValues[seg.name] = segCode ? optDesc : "...";
+
+                tableBody.innerHTML += `<tr class="border-b hover:bg-slate-50"><td class="p-2.5 font-semibold text-slate-700">${seg.name}</td><td class="p-2.5 text-slate-500 font-mono">${seg.length} digit</td><td class="p-2.5 font-mono font-bold text-blue-600">${segCode || '-'}</td><td class="p-2.5 text-slate-700">${segCode ? optLabel : '<span class="text-red-400">Digit Kurang</span>'}</td></tr>`;
+            });
+
+            let activeTemplate = matchedCat.descTemplate;
+            if (matchedCat.descRules) {
+                for (let rule of matchedCat.descRules) {
+                    if (selectedCodeMap[rule.segmentId] && selectedCodeMap[rule.segmentId].toUpperCase() === rule.triggerCode.toUpperCase()) { activeTemplate = rule.template; break; }
+                }
+            }
+            let descStr = activeTemplate;
+            Object.keys(descValues).forEach(key => { descStr = descStr.replace(new RegExp(`\\{${key}\\}`, 'g'), descValues[key]); });
+            currentDecodedBaseDesc = descStr.replace(/,\s*,/g, ',').replace(/,\s*$/g, '').replace(/^\s*,\s*/g, '').replace(/\s+/g, ' ').trim();
+
+            await fetchCatalogFromCloud();
+            const matchedItems = catalogData.filter(i => i.pn && i.pn.toUpperCase() === inputPn);
+            if (matchedItems.length > 0) {
+                document.getElementById('decoderCatalogVariations').classList.remove('hidden');
+                const sel = document.getElementById('decoderVarSelect'); sel.innerHTML = `<option value="">-- [Standar Segmen Tanpa Catatan Khusus] --</option>`;
+                matchedItems.forEach((item, index) => { sel.innerHTML += `<option value="${index}">Proyek: ${item.project} | ${(item.extraDescription||'').replace(/\n/g, ' ')}</option>`; });
+            }
+            document.getElementById('decoderFullDesc').textContent = currentDecodedBaseDesc;
+        }
+
+        function selectCatalogVariation(index) {
+            const fd = document.getElementById('decoderFullDesc');
+            if (index === "") { fd.textContent = currentDecodedBaseDesc; return; }
+            const inputPn = document.getElementById('decoderInput').value.trim().toUpperCase();
+            const matchedItems = catalogData.filter(i => i.pn && i.pn.toUpperCase() === inputPn);
+            const item = matchedItems[index];
+            if (item) {
+                let finalDesc = currentDecodedBaseDesc;
+                if (item.extraDescription) finalDesc += `\n\n[Keterangan Tambahan - Proyek ${item.project}]:\n${item.extraDescription}`;
+                fd.textContent = finalDesc;
+            }
+        }
+
+        // ==========================================
+        // 4. CATALOG, APPROVAL, EXPORT, PRINT
+        // ==========================================
+        async function fetchCatalogFromCloud() {
+            showLoader("Load Katalog...");
+            try {
+                const res = await fetch(`${API_URL}?action=getCatalogData`);
+                catalogData = await res.json(); renderCatalogTable();
+            } catch(e) {} finally { hideLoader(); }
+        }
+
+        function renderCatalogTable() {
+            const tbody = document.getElementById('catalogTableBody');
+            const search = document.getElementById('catalogSearch').value.toLowerCase();
+            tbody.innerHTML = '';
+            
+            catalogData.filter(i => (i.pn||"").toLowerCase().includes(search) || (i.project||"").toLowerCase().includes(search)).forEach(item => {
+                const canDirectEdit = currentUser.username === item.creator || ['admin','superadmin'].includes(currentUser.role);
+                tbody.innerHTML += `
+                    <tr>
+                        <td class="p-3 font-mono font-bold">${item.pn}</td><td class="p-3">${item.categoryName}</td>
+                        <td class="p-3 text-[11px]">${item.description}</td><td class="p-3">${item.project}</td>
+                        <td class="p-3">${item.stock}</td><td class="p-3 text-[10px] text-blue-600 font-bold">${item.creator || 'admin'}</td>
+                        <td class="p-3 text-center no-print">
+                            <button onclick="openEditCatalogModal('${item.id}')" class="text-${canDirectEdit ? 'blue' : 'amber'}-600 px-2 text-lg" title="${canDirectEdit ? 'Edit Data' : 'Request Edit'}"><i class="fa-solid fa-pen-to-square"></i></button>
+                            <button onclick="requestDeleteCatalog('${item.id}')" class="text-red-600 px-2 text-lg"><i class="fa-solid fa-trash"></i></button>
+                        </td>
+                    </tr>
+                `;
+            });
+        }
+
+        function openEditCatalogModal(id) {
+            const item = catalogData.find(i => i.id === id);
+            document.getElementById('editCatId').value = item.id;
+            document.getElementById('editCatPn').value = item.pn;
+            document.getElementById('editCatDesc').value = item.description;
+            document.getElementById('editCatProject').value = item.project;
+            
+            const isOwner = currentUser.username === item.creator || ['admin','superadmin'].includes(currentUser.role);
+            document.getElementById('editModalWarning').classList.toggle('hidden', isOwner);
+            document.getElementById('btnSaveEdit').textContent = isOwner ? 'Simpan Langsung' : 'Kirim Request Approval';
+            document.getElementById('editCatalogModal').classList.remove('hidden');
+        }
+
+        function closeEditCatalogModal() { document.getElementById('editCatalogModal').classList.add('hidden'); }
+
+        async function saveCatalogEditSubmit() {
+            const id = document.getElementById('editCatId').value;
+            const item = catalogData.find(i => i.id === id);
+            const newData = { id: id, description: document.getElementById('editCatDesc').value, project: document.getElementById('editCatProject').value };
+            const isOwner = currentUser.username === item.creator || ['admin','superadmin'].includes(currentUser.role);
+            
             showLoader("Memproses...");
-            if (isOwner) {
-                await fetch(API_URL, { method:'POST', body: JSON.stringify({ action: "deleteCatalogItem", requesterUsername: currentUser.username, id: id }) });
-            } else {
-                await fetch(API_URL, { method:'POST', body: JSON.stringify({ action: "requestApproval", requesterUsername: currentUser.username, data: { type: "DELETE", catalogId: id, targetData: {} } }) });
-                alert("Request Hapus dikirim ke Admin!");
-            }
-            hideLoader();
-            fetchCatalogFromCloud();
+            try {
+                if (isOwner) {
+                    await fetch(API_URL, { method:'POST', body: JSON.stringify({ action: "updateCatalogItem", requesterUsername: currentUser.username, data: newData }) });
+                    alert("Berhasil diperbarui langsung!");
+                } else {
+                    await fetch(API_URL, { method:'POST', body: JSON.stringify({ action: "requestApproval", requesterUsername: currentUser.username, data: { type: "EDIT", catalogId: id, targetData: newData } }) });
+                    alert("Request Edit berhasil dikirim ke Admin!");
+                }
+                closeEditCatalogModal(); fetchCatalogFromCloud();
+            } catch(e) {} finally { hideLoader(); }
         }
-    }
 
-    async function fetchPendingApprovals() {
-        showLoader("Cek Request...");
-        const res = await fetch(API_URL, { method:'POST', body: JSON.stringify({ action: "getPendingApprovals", requesterUsername: currentUser.username }) });
-        pendingApprovals = await res.json();
-        hideLoader();
-        
-        const tbody = document.getElementById('approvalsTableBody');
-        tbody.innerHTML = '';
-        if (pendingApprovals.length === 0) tbody.innerHTML = `<tr><td colspan="4" class="text-center p-4">Tidak ada request pending.</td></tr>`;
-        
-        pendingApprovals.forEach(req => {
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td class="p-3 font-bold text-blue-700">${req.requester}</td>
-                <td class="p-3 font-bold ${req.type==='DELETE'?'text-red-600':'text-amber-600'}">${req.type}</td>
-                <td class="p-3 text-[10px] break-all">${JSON.stringify(req.targetData)}</td>
-                <td class="p-3 text-center">
-                    <button onclick="resolveApprove('${req.reqId}', 'APPROVED')" class="bg-emerald-600 text-white px-2 py-1 rounded text-[10px] m-1">Approve</button>
-                    <button onclick="resolveApprove('${req.reqId}', 'REJECTED')" class="bg-red-600 text-white px-2 py-1 rounded text-[10px] m-1">Reject</button>
-                </td>
-            `;
-            tbody.appendChild(tr);
-        });
-    }
+        async function requestDeleteCatalog(id) {
+            const item = catalogData.find(i => i.id === id);
+            const isOwner = currentUser.username === item.creator || ['admin','superadmin'].includes(currentUser.role);
+            if(confirm(`Yakin ingin menghapus ${item.pn}?`)) {
+                showLoader("Memproses...");
+                if (isOwner) await fetch(API_URL, { method:'POST', body: JSON.stringify({ action: "deleteCatalogItem", requesterUsername: currentUser.username, id: id }) });
+                else {
+                    await fetch(API_URL, { method:'POST', body: JSON.stringify({ action: "requestApproval", requesterUsername: currentUser.username, data: { type: "DELETE", catalogId: id, targetData: {} } }) });
+                    alert("Request Hapus dikirim ke Admin!");
+                }
+                hideLoader(); fetchCatalogFromCloud();
+            }
+        }
 
-    async function resolveApprove(reqId, status) {
-        showLoader("Memproses...");
-        await fetch(API_URL, { method:'POST', body: JSON.stringify({ action: "resolveApproval", requesterUsername: currentUser.username, reqId: reqId, resolution: status }) });
-        hideLoader();
-        fetchPendingApprovals();
-    }
+        async function fetchPendingApprovals() {
+            showLoader("Cek Request...");
+            const res = await fetch(API_URL, { method:'POST', body: JSON.stringify({ action: "getPendingApprovals", requesterUsername: currentUser.username }) });
+            pendingApprovals = await res.json(); hideLoader();
+            
+            const tbody = document.getElementById('approvalsTableBody'); tbody.innerHTML = '';
+            if (pendingApprovals.length === 0) tbody.innerHTML = `<tr><td colspan="4" class="text-center p-4">Tidak ada request pending.</td></tr>`;
+            
+            pendingApprovals.forEach(req => {
+                tbody.innerHTML += `
+                    <tr>
+                        <td class="p-3 font-bold text-blue-700">${req.requester}</td>
+                        <td class="p-3 font-bold ${req.type==='DELETE'?'text-red-600':'text-amber-600'}">${req.type}</td>
+                        <td class="p-3 text-[10px] break-all">${JSON.stringify(req.targetData)}</td>
+                        <td class="p-3 text-center">
+                            <button onclick="resolveApprove('${req.reqId}', 'APPROVED')" class="bg-emerald-600 text-white px-2 py-1 rounded text-[10px] m-1">Approve</button>
+                            <button onclick="resolveApprove('${req.reqId}', 'REJECTED')" class="bg-red-600 text-white px-2 py-1 rounded text-[10px] m-1">Reject</button>
+                        </td>
+                    </tr>
+                `;
+            });
+        }
 
-    function openPrintSetupModal() {
-        document.getElementById('printSetupModal').classList.remove('hidden');
-    }
+        async function resolveApprove(reqId, status) {
+            showLoader("Memproses...");
+            await fetch(API_URL, { method:'POST', body: JSON.stringify({ action: "resolveApproval", requesterUsername: currentUser.username, reqId: reqId, resolution: status }) });
+            hideLoader(); fetchPendingApprovals();
+        }
 
-    function executePrint() {
-        document.getElementById('printSetupModal').classList.add('hidden');
-        document.getElementById('pHeaderTitle').textContent = document.getElementById('setupPrintTitle').value;
-        document.getElementById('pHeaderSub').textContent = document.getElementById('setupPrintSub').value;
-        
-        const d = new Date();
-        document.getElementById('pFooterText').innerHTML = `<b>${document.getElementById('setupPrintFooter').value}</b><br>Dicetak oleh: ${currentUser.name} | Tanggal: ${d.toLocaleDateString()} ${d.toLocaleTimeString()}`;
-        
-        const tableHTML = document.getElementById('catalogTable').outerHTML;
-        document.getElementById('printTableContainer').innerHTML = tableHTML;
-        window.print();
-    }
+        function openPrintSetupModal() { document.getElementById('printSetupModal').classList.remove('hidden'); }
 
-    function exportExcel() {
-        let table = document.getElementById("catalogTable");
-        let html = table.outerHTML;
-        let blob = new Blob(['\ufeff', html], { type: 'application/vnd.ms-excel' });
-        let url = URL.createObjectURL(blob);
-        let a = document.createElement('a');
-        a.href = url;
-        a.download = `Catalog_Export_${Date.now()}.xls`;
-        a.click();
-    }
+        function executePrint() {
+            document.getElementById('printSetupModal').classList.add('hidden');
+            document.getElementById('pHeaderTitle').textContent = document.getElementById('setupPrintTitle').value;
+            document.getElementById('pHeaderSub').textContent = document.getElementById('setupPrintSub').value;
+            
+            const d = new Date();
+            document.getElementById('pFooterText').innerHTML = `<b>${document.getElementById('setupPrintFooter').value}</b><br>Dicetak oleh: ${currentUser.name} | Tanggal: ${d.toLocaleDateString()} ${d.toLocaleTimeString()}`;
+            
+            document.getElementById('printTableContainer').innerHTML = document.getElementById('catalogTable').outerHTML;
+            window.print();
+        }
 
-    // ==========================================
-    // 4. MASTER DATA (ADMIN) - PERBAIKAN BUG #5 & #6
-    // ==========================================
-    function renderMasterDataPanel() {
-        const listContainer = document.getElementById('masterCatList');
-        listContainer.innerHTML = '';
+        function exportExcel() {
+            let table = document.getElementById("catalogTable");
+            let html = table.outerHTML;
+            let blob = new Blob(['\ufeff', html], { type: 'application/vnd.ms-excel' });
+            let a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = `Catalog_Export_${Date.now()}.xls`;
+            a.click();
+        }
 
-        masterData.forEach(cat => {
-            const btn = document.createElement('button');
-            btn.onclick = () => selectMasterCategory(cat.id);
-            btn.className = `w-full text-left px-3 py-2.5 rounded-xl text-xs font-semibold flex justify-between transition ${selectedMasterCatId === cat.id ? 'bg-blue-50 border-blue-300 text-blue-700 border' : 'hover:bg-slate-100 text-slate-700'}`;
-            btn.innerHTML = `<span>[${cat.prefix}] ${cat.name}</span><i class="fa-solid fa-chevron-right text-[10px] text-slate-400 mt-1"></i>`;
-            listContainer.appendChild(btn);
-        });
+        // ==========================================
+        // 5. MASTER DATA ADMIN
+        // ==========================================
+        function renderMasterDataPanel() {
+            const listContainer = document.getElementById('masterCatList'); listContainer.innerHTML = '';
+            masterData.forEach(cat => {
+                const btn = document.createElement('button');
+                btn.onclick = () => selectMasterCategory(cat.id);
+                btn.className = `w-full text-left px-3 py-2.5 rounded-xl text-xs font-semibold flex justify-between transition ${selectedMasterCatId === cat.id ? 'bg-blue-50 border-blue-300 text-blue-700 border' : 'hover:bg-slate-100 text-slate-700'}`;
+                btn.innerHTML = `<span>[${cat.prefix}] ${cat.name}</span><i class="fa-solid fa-chevron-right text-[10px] text-slate-400 mt-1"></i>`;
+                listContainer.appendChild(btn);
+            });
+            if (!selectedMasterCatId && masterData.length > 0) selectMasterCategory(masterData[0].id);
+            else if (selectedMasterCatId) renderMasterEditorForm(selectedMasterCatId);
+        }
 
-        if (!selectedMasterCatId && masterData.length > 0) selectMasterCategory(masterData[0].id);
-        else if (selectedMasterCatId) renderMasterEditorForm(selectedMasterCatId);
-    }
+        function selectMasterCategory(catId) { selectedMasterCatId = catId; renderMasterDataPanel(); }
 
-    function selectMasterCategory(catId) {
-        selectedMasterCatId = catId;
-        renderMasterDataPanel();
-    }
+        function renderMasterEditorForm(catId) {
+            const panel = document.getElementById('masterEditorPanel');
+            const cat = masterData.find(c => c.id === catId);
+            if (!cat) return;
 
-    function renderMasterEditorForm(catId) {
-        const panel = document.getElementById('masterEditorPanel');
-        const cat = masterData.find(c => c.id === catId);
-        if (!cat) return;
-
-        panel.innerHTML = `
-            <div class="flex justify-between items-center border-b pb-3 mb-4">
-                <h3 class="font-bold text-slate-800 text-base">Edit: ${cat.name}</h3>
-                <div>
+            panel.innerHTML = `
+                <div class="flex justify-between items-center border-b pb-3 mb-4">
+                    <h3 class="font-bold text-slate-800 text-base">Edit: ${cat.name}</h3>
                     <button onclick="deleteMasterCategory('${cat.id}')" class="bg-red-100 text-red-700 text-xs px-3 py-1.5 rounded-lg"><i class="fa-solid fa-trash"></i> Hapus</button>
                 </div>
-            </div>
-            
-            <div class="grid grid-cols-2 gap-4 text-xs mb-4">
-                <div><label class="block font-bold mb-1">Nama Kategori</label><input type="text" id="mCatName" value="${cat.name}" onchange="updateMasterHeader('${cat.id}')" class="w-full border rounded-lg px-3 py-2 outline-none"></div>
-                <div><label class="block font-bold mb-1">Prefix (4 Digit)</label><input type="text" id="mCatPrefix" maxlength="4" value="${cat.prefix.toUpperCase()}" oninput="this.value = this.value.toUpperCase()" onchange="updateMasterHeader('${cat.id}')" class="w-full border rounded-lg px-3 py-2 font-mono outline-none"></div>
-            </div>
-
-            <div class="space-y-3 bg-slate-50 p-4 rounded-xl border mb-4">
-                <label class="block text-xs font-bold mb-1">Template Deskripsi</label>
-                <input type="text" id="mCatDescTemplate" value="${cat.descTemplate}" onchange="updateMasterHeader('${cat.id}')" class="w-full border rounded-lg px-3 py-2 text-xs font-mono outline-none">
-            </div>
-
-            <!-- SEGMEN -->
-            <div class="space-y-3 border-t pt-4 mb-4">
-                <div class="flex justify-between items-center"><h4 class="text-xs font-bold uppercase">Struktur Segmen Digit</h4><button onclick="addMasterSegment('${cat.id}')" class="text-blue-600 text-xs font-bold">+ Segmen</button></div>
-                <div id="mSegmentsContainer" class="space-y-4"></div>
-            </div>
-
-            <!-- ATURAN KETERKAITAN (BUG FIXED) -->
-            <div class="space-y-3 border-t pt-4">
-                <h4 class="text-xs font-bold uppercase">Aturan Keterkaitan Opsi</h4>
-                <div id="mConditionalRulesContainer" class="p-4 bg-slate-50 border rounded-xl text-xs space-y-3"></div>
-            </div>
-        `;
-        renderMasterSegments(cat);
-        renderConditionalRulesMapping(cat);
-    }
-
-    function updateMasterHeader(catId) {
-        const cat = masterData.find(c => c.id === catId);
-        cat.name = document.getElementById('mCatName').value;
-        cat.prefix = document.getElementById('mCatPrefix').value.toUpperCase();
-        cat.descTemplate = document.getElementById('mCatDescTemplate').value;
-        if (cat.segments.length > 0) cat.segments[0].options = [{ code: cat.prefix, label: cat.name, showInDesc: true }];
-        setMasterDataDirty(true); initCategoryDropdowns(); renderMasterDataPanel();
-    }
-
-    // --- MANAJEMEN SEGMEN ---
-    function renderMasterSegments(cat) {
-        const container = document.getElementById('mSegmentsContainer');
-        container.innerHTML = '';
-        cat.segments.forEach((seg, sIdx) => {
-            const segBox = document.createElement('div');
-            segBox.className = "border bg-white p-3 rounded-xl space-y-2";
-            segBox.innerHTML = `
-                <div class="flex items-center justify-between border-b pb-1">
-                    <span class="font-bold text-xs">Segmen ${sIdx + 1}</span>
-                    <div>
-                        <label class="text-[10px] mr-2"><input type="checkbox" ${seg.allowCustom?'checked':''} onchange="updateSegProp('${cat.id}',${sIdx},'allowCustom',this.checked)"> Custom Input</label>
-                        ${sIdx > 0 ? `<button onclick="removeMasterSegment('${cat.id}',${sIdx})" class="text-red-500"><i class="fa-solid fa-trash"></i></button>` : ''}
-                    </div>
+                <div class="grid grid-cols-2 gap-4 text-xs mb-4">
+                    <div><label class="block font-bold mb-1">Nama Kategori</label><input type="text" id="mCatName" value="${cat.name}" onchange="updateMasterHeader('${cat.id}')" class="w-full border rounded-lg px-3 py-2 outline-none"></div>
+                    <div><label class="block font-bold mb-1">Prefix (4 Digit)</label><input type="text" id="mCatPrefix" maxlength="4" value="${cat.prefix.toUpperCase()}" oninput="this.value = this.value.toUpperCase()" onchange="updateMasterHeader('${cat.id}')" class="w-full border rounded-lg px-3 py-2 font-mono outline-none"></div>
                 </div>
-                <div class="grid grid-cols-2 gap-2 text-xs">
-                    <input type="text" value="${seg.name}" onchange="updateSegProp('${cat.id}',${sIdx},'name',this.value)" class="border rounded px-2 py-1" placeholder="Nama Segmen">
-                    <input type="number" value="${seg.length}" onchange="updateSegProp('${cat.id}',${sIdx},'length',parseInt(this.value))" class="border rounded px-2 py-1" placeholder="Panjang Digit">
+                <div class="space-y-3 bg-slate-50 p-4 rounded-xl border mb-4">
+                    <label class="block text-xs font-bold mb-1">Template Deskripsi Default</label>
+                    <input type="text" id="mCatDescTemplate" value="${cat.descTemplate}" onchange="updateMasterHeader('${cat.id}')" class="w-full border rounded-lg px-3 py-2 text-xs font-mono outline-none">
                 </div>
-                <div class="text-[10px] font-bold text-slate-500 mt-2 flex justify-between">
-                    <span>Opsi Pilihan</span> ${sIdx > 0 ? `<button onclick="addSegOption('${cat.id}',${sIdx})" class="text-blue-500">+ Tambah Opsi</button>` : ''}
+                <div class="space-y-3 border-t pt-4 mb-4">
+                    <div class="flex justify-between items-center"><h4 class="text-xs font-bold uppercase">Struktur Segmen Digit</h4><button onclick="addMasterSegment('${cat.id}')" class="text-blue-600 text-xs font-bold">+ Segmen</button></div>
+                    <div id="mSegmentsContainer" class="space-y-4"></div>
                 </div>
-                <div id="seg_opts_${sIdx}" class="space-y-1"></div>
+                <div class="space-y-3 border-t pt-4">
+                    <h4 class="text-xs font-bold uppercase">Aturan Keterkaitan Opsi</h4>
+                    <div id="mConditionalRulesContainer" class="p-4 bg-slate-50 border rounded-xl text-xs space-y-3"></div>
+                </div>
             `;
-            container.appendChild(segBox);
-
-            const optsContainer = segBox.querySelector(`#seg_opts_${sIdx}`);
-            seg.options.forEach((opt, oIdx) => {
-                optsContainer.innerHTML += `
-                    <div class="flex gap-1 items-center text-xs">
-                        <input type="text" value="${opt.code}" onchange="updateSegOpt('${cat.id}',${sIdx},${oIdx},'code',this.value.toUpperCase())" class="w-16 font-mono border rounded px-1 py-1 uppercase" ${sIdx===0?'readonly':''}>
-                        <input type="text" value="${opt.label}" onchange="updateSegOpt('${cat.id}',${sIdx},${oIdx},'label',this.value)" class="flex-1 border rounded px-1 py-1" placeholder="Label">
-                        <input type="text" value="${opt.desc||''}" onchange="updateSegOpt('${cat.id}',${sIdx},${oIdx},'desc',this.value)" class="flex-1 border rounded px-1 py-1 bg-amber-50" placeholder="Deskripsi">
-                        ${sIdx > 0 ? `<button onclick="removeSegOpt('${cat.id}',${sIdx},${oIdx})" class="text-red-500 px-1"><i class="fa-solid fa-x"></i></button>` : ''}
-                    </div>
-                `;
-            });
-        });
-    }
-
-    function addMasterSegment(catId) {
-        const cat = masterData.find(c => c.id === catId);
-        cat.segments.push({ id: "s" + (cat.segments.length + 1), name: "Baru", length: 2, allowCustom: false, options: [{code:"01", label:"Opsi 1"}] });
-        setMasterDataDirty(true); renderMasterEditorForm(catId);
-    }
-    function removeMasterSegment(catId, sIdx) {
-        masterData.find(c => c.id === catId).segments.splice(sIdx, 1);
-        setMasterDataDirty(true); renderMasterEditorForm(catId);
-    }
-    function updateSegProp(catId, sIdx, prop, val) {
-        masterData.find(c => c.id === catId).segments[sIdx][prop] = val;
-        setMasterDataDirty(true);
-    }
-    function addSegOption(catId, sIdx) {
-        const cat = masterData.find(c => c.id === catId);
-        cat.segments[sIdx].options.push({code:"XX", label:"Baru"});
-        setMasterDataDirty(true); renderMasterEditorForm(catId);
-    }
-    function updateSegOpt(catId, sIdx, oIdx, field, val) {
-        masterData.find(c => c.id === catId).segments[sIdx].options[oIdx][field] = val;
-        setMasterDataDirty(true);
-    }
-    function removeSegOpt(catId, sIdx, oIdx) {
-        masterData.find(c => c.id === catId).segments[sIdx].options.splice(oIdx, 1);
-        setMasterDataDirty(true); renderMasterEditorForm(catId);
-    }
-    
-    // --- CONDITIONAL RULES MAPPING (FIX COMPOSITE KEY & SELECT ALL) ---
-    function renderConditionalRulesMapping(cat) {
-        const container = document.getElementById('mConditionalRulesContainer');
-        if (cat.segments.length < 2) {
-            container.innerHTML = `<div class="italic text-slate-400">Minimal butuh 2 segmen.</div>`; return;
+            renderMasterSegments(cat); renderConditionalRulesMapping(cat);
         }
 
-        let pIdx = parseInt(container.getAttribute('data-p') || 0);
-        let cIdx = parseInt(container.getAttribute('data-c') || 1);
-        if (pIdx >= cat.segments.length) pIdx = 0;
-        if (cIdx >= cat.segments.length || cIdx <= pIdx) cIdx = pIdx + 1;
-        
-        container.setAttribute('data-p', pIdx); container.setAttribute('data-c', cIdx);
-        const pSeg = cat.segments[pIdx]; const cSeg = cat.segments[cIdx];
+        function updateMasterHeader(catId) {
+            const cat = masterData.find(c => c.id === catId);
+            cat.name = document.getElementById('mCatName').value; cat.prefix = document.getElementById('mCatPrefix').value.toUpperCase();
+            cat.descTemplate = document.getElementById('mCatDescTemplate').value;
+            if (cat.segments.length > 0) cat.segments[0].options = [{ code: cat.prefix, label: cat.name, showInDesc: true }];
+            setMasterDataDirty(true); initCategoryDropdowns(); renderMasterDataPanel();
+        }
 
-        let pOpts = cat.segments.map((s,i) => `<option value="${i}" ${i===pIdx?'selected':''}>Seg ${i+1}: ${s.name}</option>`).join('');
-        let cOpts = cat.segments.map((s,i) => `<option value="${i}" ${i===cIdx?'selected':''} ${i<=pIdx?'disabled':''}>Seg ${i+1}: ${s.name}</option>`).join('');
-
-        container.innerHTML = `
-            <div class="grid grid-cols-2 gap-2 mb-2">
-                <select id="selPSeg" onchange="changeRulePair('${cat.id}')" class="border p-1 text-xs font-bold">${pOpts}</select>
-                <select id="selCSeg" onchange="changeRulePair('${cat.id}')" class="border p-1 text-xs font-bold">${cOpts}</select>
-            </div>
-            <div id="rulesList" class="space-y-2 mt-2"></div>
-        `;
-
-        const rulesList = container.querySelector('#rulesList');
-        if(!cat.conditionalRules) cat.conditionalRules = {};
-
-        pSeg.options.forEach(opt => {
-            const pCode = opt.code.toUpperCase();
-            const pKey = `${pSeg.id}_${pCode}`; // KUNCI COMPOSITE BARU (e.g., s4_01)
-            
-            let allowedChildKeys = cat.conditionalRules[pKey] || null;
-
-            const card = document.createElement('div');
-            card.className = "bg-white p-2 border rounded text-xs";
-            
-            // TOMBOL CHECK ALL / UNCHECK ALL
-            const header = document.createElement('div');
-            header.className = "flex justify-between items-center border-b pb-1 mb-1 font-bold";
-            header.innerHTML = `
-                <span>Jika Induk: [${pCode}] ${opt.label}</span>
-                <div class="space-x-2">
-                    <button onclick="toggleAllRules('${cat.id}', '${pSeg.id}', '${pCode}', '${cSeg.id}', true)" class="text-blue-600 text-[10px] bg-blue-50 px-1 rounded">Centang Semua</button>
-                    <button onclick="toggleAllRules('${cat.id}', '${pSeg.id}', '${pCode}', '${cSeg.id}', false)" class="text-red-600 text-[10px] bg-red-50 px-1 rounded">Kosongkan Semua</button>
-                </div>
-            `;
-            card.appendChild(header);
-
-            const boxes = document.createElement('div');
-            boxes.className = "flex flex-wrap gap-2";
-            cSeg.options.forEach(cOpt => {
-                const cCode = cOpt.code.toUpperCase();
-                const cKey = `${cSeg.id}_${cCode}`; // KUNCI COMPOSITE BARU
-                const isChecked = allowedChildKeys === null || allowedChildKeys.includes(cKey);
-                
-                boxes.innerHTML += `
-                    <label class="bg-slate-50 px-1.5 py-0.5 border rounded cursor-pointer hover:bg-slate-100 flex items-center gap-1">
-                        <input type="checkbox" ${isChecked?'checked':''} onchange="toggleRule('${cat.id}', '${pSeg.id}', '${pCode}', '${cSeg.id}', '${cCode}', this.checked)">
-                        <span class="font-mono">${cCode}</span>
-                    </label>
+        function renderMasterSegments(cat) {
+            const container = document.getElementById('mSegmentsContainer'); container.innerHTML = '';
+            cat.segments.forEach((seg, sIdx) => {
+                const segBox = document.createElement('div');
+                segBox.className = "border bg-white p-3 rounded-xl space-y-2";
+                segBox.innerHTML = `
+                    <div class="flex items-center justify-between border-b pb-1">
+                        <span class="font-bold text-xs">Segmen ${sIdx + 1}</span>
+                        <div>
+                            <label class="text-[10px] mr-2"><input type="checkbox" ${seg.allowCustom?'checked':''} onchange="updateSegProp('${cat.id}',${sIdx},'allowCustom',this.checked)"> Custom Input</label>
+                            ${sIdx > 0 ? `<button onclick="removeMasterSegment('${cat.id}',${sIdx})" class="text-red-500"><i class="fa-solid fa-trash"></i></button>` : ''}
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2 text-xs">
+                        <input type="text" value="${seg.name}" onchange="updateSegProp('${cat.id}',${sIdx},'name',this.value)" class="border rounded px-2 py-1" placeholder="Nama Segmen">
+                        <input type="number" value="${seg.length}" onchange="updateSegProp('${cat.id}',${sIdx},'length',parseInt(this.value))" class="border rounded px-2 py-1" placeholder="Panjang Digit">
+                    </div>
+                    <div class="text-[10px] font-bold text-slate-500 mt-2 flex justify-between">
+                        <span>Opsi Pilihan</span> ${sIdx > 0 ? `<button onclick="addSegOption('${cat.id}',${sIdx})" class="text-blue-500">+ Tambah Opsi</button>` : ''}
+                    </div>
+                    <div id="seg_opts_${sIdx}" class="space-y-1"></div>
                 `;
+                container.appendChild(segBox);
+
+                const optsContainer = segBox.querySelector(`#seg_opts_${sIdx}`);
+                seg.options.forEach((opt, oIdx) => {
+                    optsContainer.innerHTML += `
+                        <div class="flex gap-1 items-center text-xs">
+                            <input type="text" value="${opt.code}" onchange="updateSegOpt('${cat.id}',${sIdx},${oIdx},'code',this.value.toUpperCase())" class="w-16 font-mono border rounded px-1 py-1 uppercase" ${sIdx===0?'readonly':''}>
+                            <input type="text" value="${opt.label}" onchange="updateSegOpt('${cat.id}',${sIdx},${oIdx},'label',this.value)" class="flex-1 border rounded px-1 py-1" placeholder="Label">
+                            <input type="text" value="${opt.desc||''}" onchange="updateSegOpt('${cat.id}',${sIdx},${oIdx},'desc',this.value)" class="flex-1 border rounded px-1 py-1 bg-amber-50" placeholder="Deskripsi">
+                            ${sIdx > 0 ? `<button onclick="removeSegOpt('${cat.id}',${sIdx},${oIdx})" class="text-red-500 px-1"><i class="fa-solid fa-x"></i></button>` : ''}
+                        </div>
+                    `;
+                });
             });
-            card.appendChild(boxes);
-            rulesList.appendChild(card);
-        });
-    }
+        }
 
-    function changeRulePair(catId) {
-        document.getElementById('mConditionalRulesContainer').setAttribute('data-p', document.getElementById('selPSeg').value);
-        document.getElementById('mConditionalRulesContainer').setAttribute('data-c', document.getElementById('selCSeg').value);
-        renderConditionalRulesMapping(masterData.find(c => c.id === catId));
-    }
+        function addMasterSegment(catId) { masterData.find(c => c.id === catId).segments.push({ id: "s" + (masterData.find(c => c.id === catId).segments.length + 1), name: "Baru", length: 2, allowCustom: false, options: [{code:"01", label:"Opsi 1"}] }); setMasterDataDirty(true); renderMasterEditorForm(catId); }
+        function removeMasterSegment(catId, sIdx) { masterData.find(c => c.id === catId).segments.splice(sIdx, 1); setMasterDataDirty(true); renderMasterEditorForm(catId); }
+        function updateSegProp(catId, sIdx, prop, val) { masterData.find(c => c.id === catId).segments[sIdx][prop] = val; setMasterDataDirty(true); }
+        function addSegOption(catId, sIdx) { masterData.find(c => c.id === catId).segments[sIdx].options.push({code:"XX", label:"Baru"}); setMasterDataDirty(true); renderMasterEditorForm(catId); }
+        function updateSegOpt(catId, sIdx, oIdx, field, val) { masterData.find(c => c.id === catId).segments[sIdx].options[oIdx][field] = val; setMasterDataDirty(true); }
+        function removeSegOpt(catId, sIdx, oIdx) { masterData.find(c => c.id === catId).segments[sIdx].options.splice(oIdx, 1); setMasterDataDirty(true); renderMasterEditorForm(catId); }
+        
+        function renderConditionalRulesMapping(cat) {
+            const container = document.getElementById('mConditionalRulesContainer');
+            if (cat.segments.length < 2) { container.innerHTML = `<div class="italic text-slate-400">Minimal butuh 2 segmen.</div>`; return; }
 
-    function toggleRule(catId, pSegId, pCode, cSegId, cCode, isChecked) {
-        const cat = masterData.find(c => c.id === catId);
-        const pKey = `${pSegId}_${pCode}`;
-        const cKey = `${cSegId}_${cCode}`;
-        
-        if(!cat.conditionalRules) cat.conditionalRules = {};
-        
-        // Jika belum ada array, buat array dari SEMUA opsi child yang ada saat ini
-        if(!Array.isArray(cat.conditionalRules[pKey])) {
+            let pIdx = parseInt(container.getAttribute('data-p') || 0); let cIdx = parseInt(container.getAttribute('data-c') || 1);
+            if (pIdx >= cat.segments.length) pIdx = 0; if (cIdx >= cat.segments.length || cIdx <= pIdx) cIdx = pIdx + 1;
+            container.setAttribute('data-p', pIdx); container.setAttribute('data-c', cIdx);
+            const pSeg = cat.segments[pIdx]; const cSeg = cat.segments[cIdx];
+
+            let pOpts = cat.segments.map((s,i) => `<option value="${i}" ${i===pIdx?'selected':''}>Seg ${i+1}: ${s.name}</option>`).join('');
+            let cOpts = cat.segments.map((s,i) => `<option value="${i}" ${i===cIdx?'selected':''} ${i<=pIdx?'disabled':''}>Seg ${i+1}: ${s.name}</option>`).join('');
+
+            container.innerHTML = `
+                <div class="grid grid-cols-2 gap-2 mb-2">
+                    <select id="selPSeg" onchange="changeRulePair('${cat.id}')" class="border p-1 text-xs font-bold">${pOpts}</select>
+                    <select id="selCSeg" onchange="changeRulePair('${cat.id}')" class="border p-1 text-xs font-bold">${cOpts}</select>
+                </div>
+                <div id="rulesList" class="space-y-2 mt-2"></div>
+            `;
+
+            const rulesList = container.querySelector('#rulesList');
+            if(!cat.conditionalRules) cat.conditionalRules = {};
+
+            pSeg.options.forEach(opt => {
+                const pCode = opt.code.toUpperCase(); const pKey = `${pSeg.id}_${pCode}`;
+                let allowedChildKeys = cat.conditionalRules[pKey] || null;
+
+                const card = document.createElement('div'); card.className = "bg-white p-2 border rounded text-xs";
+                card.innerHTML = `
+                    <div class="flex justify-between items-center border-b pb-1 mb-1 font-bold">
+                        <span>Jika Induk: [${pCode}] ${opt.label}</span>
+                        <div class="space-x-2">
+                            <button onclick="toggleAllRules('${cat.id}', '${pSeg.id}', '${pCode}', '${cSeg.id}', true)" class="text-blue-600 text-[10px] bg-blue-50 px-1 rounded">Centang Semua</button>
+                            <button onclick="toggleAllRules('${cat.id}', '${pSeg.id}', '${pCode}', '${cSeg.id}', false)" class="text-red-600 text-[10px] bg-red-50 px-1 rounded">Kosongkan Semua</button>
+                        </div>
+                    </div>
+                `;
+
+                const boxes = document.createElement('div'); boxes.className = "flex flex-wrap gap-2";
+                cSeg.options.forEach(cOpt => {
+                    const cCode = cOpt.code.toUpperCase(); const cKey = `${cSeg.id}_${cCode}`;
+                    const isChecked = allowedChildKeys === null || allowedChildKeys.includes(cKey);
+                    boxes.innerHTML += `
+                        <label class="bg-slate-50 px-1.5 py-0.5 border rounded cursor-pointer hover:bg-slate-100 flex items-center gap-1">
+                            <input type="checkbox" ${isChecked?'checked':''} onchange="toggleRule('${cat.id}', '${pSeg.id}', '${pCode}', '${cSeg.id}', '${cCode}', this.checked)">
+                            <span class="font-mono">${cCode}</span>
+                        </label>
+                    `;
+                });
+                card.appendChild(boxes); rulesList.appendChild(card);
+            });
+        }
+
+        function changeRulePair(catId) {
+            document.getElementById('mConditionalRulesContainer').setAttribute('data-p', document.getElementById('selPSeg').value);
+            document.getElementById('mConditionalRulesContainer').setAttribute('data-c', document.getElementById('selCSeg').value);
+            renderConditionalRulesMapping(masterData.find(c => c.id === catId));
+        }
+
+        function toggleRule(catId, pSegId, pCode, cSegId, cCode, isChecked) {
+            const cat = masterData.find(c => c.id === catId);
+            const pKey = `${pSegId}_${pCode}`; const cKey = `${cSegId}_${cCode}`;
+            if(!cat.conditionalRules) cat.conditionalRules = {};
+            
+            if(!Array.isArray(cat.conditionalRules[pKey])) {
+                const childSeg = cat.segments.find(s => s.id === cSegId);
+                cat.conditionalRules[pKey] = childSeg.options.map(o => `${cSegId}_${o.code.toUpperCase()}`);
+            }
+
+            if(isChecked) { if(!cat.conditionalRules[pKey].includes(cKey)) cat.conditionalRules[pKey].push(cKey); }
+            else { cat.conditionalRules[pKey] = cat.conditionalRules[pKey].filter(k => k !== cKey); }
+            setMasterDataDirty(true);
+        }
+
+        function toggleAllRules(catId, pSegId, pCode, cSegId, isChecked) {
+            const cat = masterData.find(c => c.id === catId);
             const childSeg = cat.segments.find(s => s.id === cSegId);
-            cat.conditionalRules[pKey] = childSeg.options.map(o => `${cSegId}_${o.code.toUpperCase()}`);
+            childSeg.options.forEach(cOpt => { toggleRule(catId, pSegId, pCode, cSegId, cOpt.code.toUpperCase(), isChecked); });
+            renderConditionalRulesMapping(cat);
         }
 
-        if(isChecked) {
-            if(!cat.conditionalRules[pKey].includes(cKey)) cat.conditionalRules[pKey].push(cKey);
-        } else {
-            cat.conditionalRules[pKey] = cat.conditionalRules[pKey].filter(k => k !== cKey);
+        function createNewCategory() {
+            const newId = "cat_" + Date.now();
+            masterData.push({
+                id: newId, prefix: "NEW1", name: "Baru", enableExtraDesc: true, descTemplate: "{Type}",
+                segments: [
+                    { id: "s1", name: "Prefix", length: 4, allowCustom: false, options: [{code: "NEW1", label: "Baru", showInDesc: true}] },
+                    { id: "s2", name: "Tipe", length: 2, allowCustom: false, options: [{code: "01", label: "Opsi 1"}] }
+                ],
+                conditionalRules: {}
+            });
+            setMasterDataDirty(true); initCategoryDropdowns(); selectMasterCategory(newId);
         }
-        setMasterDataDirty(true);
-    }
-
-    function toggleAllRules(catId, pSegId, pCode, cSegId, isChecked) {
-        const cat = masterData.find(c => c.id === catId);
-        const childSeg = cat.segments.find(s => s.id === cSegId);
         
-        childSeg.options.forEach(cOpt => {
-            toggleRule(catId, pSegId, pCode, cSegId, cOpt.code.toUpperCase(), isChecked);
-        });
-        
-        renderConditionalRulesMapping(cat); // Render ulang UI Checkbox
-    }
-
-    function createNewCategory() {
-        const newId = "cat_" + Date.now();
-        masterData.push({
-            id: newId, prefix: "NEW1", name: "Baru", enableExtraDesc: true, descTemplate: "{Type}",
-            segments: [
-                { id: "s1", name: "Prefix", length: 4, allowCustom: false, options: [{code: "NEW1", label: "Baru", showInDesc: true}] },
-                { id: "s2", name: "Tipe", length: 2, allowCustom: false, options: [{code: "01", label: "Opsi 1"}] }
-            ],
-            conditionalRules: {}
-        });
-        setMasterDataDirty(true); initCategoryDropdowns(); selectMasterCategory(newId);
-    }
-    
-    function deleteMasterCategory(catId) {
-        if(confirm('Hapus kategori ini?')) {
-            masterData = masterData.filter(c => c.id !== catId);
-            selectedMasterCatId = null; setMasterDataDirty(true); initCategoryDropdowns(); renderMasterDataPanel();
+        function deleteMasterCategory(catId) {
+            if(confirm('Hapus kategori ini?')) {
+                masterData = masterData.filter(c => c.id !== catId);
+                selectedMasterCatId = null; setMasterDataDirty(true); initCategoryDropdowns(); renderMasterDataPanel();
+            }
         }
-    }
 
-    async function saveAllMasterToCloud() {
-        showLoader("Menyimpan Master Data...");
-        try {
-            await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: "saveMasterData", requesterUsername: currentUser.username, data: masterData }) });
-            alert("Master Data berhasil disimpan!");
-            originalMasterDataBackup = JSON.parse(JSON.stringify(masterData));
-            setMasterDataDirty(false);
-        } catch(e) { alert("Error: "+e); } finally { hideLoader(); }
-    }
-</script>
+        async function saveAllMasterToCloud() {
+            showLoader("Menyimpan Master Data...");
+            try {
+                await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: "saveMasterData", requesterUsername: currentUser.username, data: masterData }) });
+                alert("Master Data berhasil disimpan!");
+                originalMasterDataBackup = JSON.parse(JSON.stringify(masterData));
+                setMasterDataDirty(false);
+            } catch(e) { alert("Error: "+e); } finally { hideLoader(); }
+        }
+
+        // ==========================================
+        // 6. KELOLA PENGGUNA (SUPERADMIN)
+        // ==========================================
+        async function fetchUsersFromCloud() {
+            if (currentUser.role !== 'superadmin') return;
+            showLoader("Load Pengguna...");
+            try {
+                const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: "getUsersList", requesterUsername: currentUser.username }) });
+                const result = await res.json();
+                if (result.status === "success") {
+                    usersListData = result.users || [];
+                    const tbody = document.getElementById('usersTableBody'); tbody.innerHTML = '';
+                    usersListData.forEach(u => {
+                        tbody.innerHTML += `
+                            <tr class="border-b">
+                                <td class="p-3 font-bold">${u.username}</td><td class="p-3">${u.email}</td><td class="p-3">${u.division || '-'}</td>
+                                <td class="p-3 font-bold uppercase text-[10px] text-blue-600">${u.role}</td><td class="p-3 font-bold uppercase text-[10px] text-emerald-600">${u.status}</td>
+                                <td class="p-3 text-center">
+                                    <button onclick="openEditUserModal('${u.username}')" class="text-blue-600 px-2 text-lg"><i class="fa-solid fa-user-pen"></i></button>
+                                </td>
+                            </tr>
+                        `;
+                    });
+                }
+            } catch (err) {} finally { hideLoader(); }
+        }
+
+        function openEditUserModal(username) {
+            const user = usersListData.find(u => u.username === username);
+            document.getElementById('uEditUsername').value = user.username;
+            document.getElementById('uEditPassword').value = '';
+            document.getElementById('uEditRole').value = user.role || 'user';
+            document.getElementById('uEditStatus').value = user.status || 'ACTIVE';
+            document.getElementById('editUserModal').classList.remove('hidden');
+        }
+
+        async function saveUserEditSubmit() {
+            const userData = {
+                username: document.getElementById('uEditUsername').value,
+                password: document.getElementById('uEditPassword').value,
+                role: document.getElementById('uEditRole').value,
+                status: document.getElementById('uEditStatus').value
+            };
+            showLoader("Menyimpan...");
+            try {
+                await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: "updateUserData", requesterUsername: currentUser.username, userData: userData }) });
+                alert("Pengguna diperbarui!");
+                document.getElementById('editUserModal').classList.add('hidden');
+                fetchUsersFromCloud();
+            } catch (err) {} finally { hideLoader(); }
+        }
+    </script>
+</body>
+</html>
