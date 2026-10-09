@@ -111,18 +111,109 @@
                 <div class="bg-slate-900 text-white p-6 text-center">
                     <i class="fa-solid fa-user-shield text-4xl text-blue-400 mb-2"></i>
                     <h2 id="authTitle" class="text-xl font-bold">Masuk ke Sistem</h2>
+                    <p id="authSubtitle" class="text-xs text-slate-400 mt-1">Gunakan akun Anda untuk melanjutkan</p>
                 </div>
+
+                <!-- FORM 1: LOGIN -->
                 <form id="formLogin" onsubmit="handleLogin(event)" class="p-6 space-y-4">
                     <div>
                         <label class="block text-xs font-semibold text-slate-600 mb-1">Username</label>
-                        <input type="text" id="loginUsername" required class="w-full px-3.5 py-2 border rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                        <input type="text" id="loginUsername" required class="w-full px-3.5 py-2 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Masukkan Username">
                     </div>
                     <div>
-                        <label class="block text-xs font-semibold text-slate-600 mb-1">Password</label>
-                        <input type="password" id="loginPassword" required class="w-full px-3.5 py-2 border rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                        <div class="flex justify-between items-center mb-1">
+                            <label class="block text-xs font-semibold text-slate-600">Password</label>
+                            <a href="#" onclick="showAuthCard('forgot')" class="text-xs text-blue-600 hover:underline">Lupa Password?</a>
+                        </div>
+                        <input type="password" id="loginPassword" required class="w-full px-3.5 py-2 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="••••••••">
                     </div>
                     <div id="loginError" class="text-xs text-red-600 bg-red-50 p-2.5 rounded-xl hidden"></div>
-                    <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-xl text-sm transition shadow-md">Log In</button>
+                    <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-xl text-sm transition shadow-md">
+                        Log In
+                    </button>
+                    <div class="text-center border-t pt-3 mt-3 text-xs text-slate-500">
+                        Belum punya akun? <a href="#" onclick="showAuthCard('signup')" class="text-blue-600 font-semibold hover:underline">Daftar Akun Baru</a>
+                    </div>
+                </form>
+
+                <!-- FORM 2: SIGN UP -->
+                <form id="formSignUp" onsubmit="handleSignUpRequest(event)" class="p-6 space-y-3 hidden">
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="col-span-2">
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">Username <span class="text-red-500">*</span></label>
+                            <input type="text" id="regUsername" required class="w-full px-3 py-1.5 border rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">Email <span class="text-red-500">*</span></label>
+                            <input type="email" id="regEmail" required class="w-full px-3 py-1.5 border rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">Nomor Telefon</label>
+                            <input type="tel" id="regPhone" class="w-full px-3 py-1.5 border rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        <div class="col-span-2">
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">Password <span class="text-red-500">*</span></label>
+                            <input type="password" id="regPassword" required class="w-full px-3 py-1.5 border rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        <div class="col-span-2">
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">Perusahaan</label>
+                            <input type="text" id="regCompany" class="w-full px-3 py-1.5 border rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">Divisi</label>
+                            <input type="text" id="regDivision" class="w-full px-3 py-1.5 border rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">Bagian</label>
+                            <input type="text" id="regDepartment" class="w-full px-3 py-1.5 border rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500">
+                        </div>
+                    </div>
+                    <div id="signUpError" class="text-xs text-red-600 bg-red-50 p-2 rounded-lg hidden"></div>
+                    <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-xl text-sm transition mt-2">Minta Kode OTP</button>
+                    <div class="text-center border-t pt-2 mt-2 text-xs text-slate-500">
+                        Sudah punya akun? <a href="#" onclick="showAuthCard('login')" class="text-blue-600 font-semibold hover:underline">Log In</a>
+                    </div>
+                </form>
+
+                <!-- FORM 3: VERIFIKASI OTP -->
+                <form id="formVerifyOtp" onsubmit="handleVerifySignUpOtp(event)" class="p-6 space-y-4 hidden">
+                    <p class="text-xs text-slate-600">Kode verifikasi OTP telah dikirimkan ke email <b id="otpEmailTarget" class="text-blue-600"></b>.</p>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Kode OTP 6 Digit</label>
+                        <input type="text" id="otpCodeInput" maxlength="6" required class="w-full text-center tracking-widest font-mono text-lg font-bold px-3 py-2 border rounded-xl outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div id="otpError" class="text-xs text-red-600 bg-red-50 p-2 rounded-lg hidden"></div>
+                    <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2.5 rounded-xl text-sm transition">Verifikasi Pendaftaran</button>
+                    <button type="button" onclick="showAuthCard('signup')" class="w-full text-xs text-slate-500 hover:underline">Kembali</button>
+                </form>
+
+                <!-- FORM 4: LUPA PASSWORD -->
+                <form id="formForgotPass" onsubmit="handleForgotPasswordRequest(event)" class="p-6 space-y-4 hidden">
+                    <p class="text-xs text-slate-600">Masukkan email terdaftar Anda untuk menerima kode OTP reset password.</p>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Email Terdaftar</label>
+                        <input type="email" id="forgotEmail" required class="w-full px-3.5 py-2 border rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div id="forgotError" class="text-xs text-red-600 bg-red-50 p-2 rounded-lg hidden"></div>
+                    <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-xl text-sm transition">Kirim Kode Reset</button>
+                    <div class="text-center border-t pt-2 text-xs text-slate-500">
+                        <a href="#" onclick="showAuthCard('login')" class="text-blue-600 font-semibold hover:underline">Kembali ke Login</a>
+                    </div>
+                </form>
+
+                <!-- FORM 5: RESET PASSWORD -->
+                <form id="formResetPass" onsubmit="handleResetPasswordSubmit(event)" class="p-6 space-y-3 hidden">
+                    <p class="text-xs text-slate-600">Kode OTP dikirim ke <b id="resetEmailTarget" class="text-blue-600"></b>.</p>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Kode OTP 6 Digit</label>
+                        <input type="text" id="resetOtpInput" maxlength="6" required class="w-full text-center tracking-widest font-mono text-base font-bold px-3 py-1.5 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Password Baru</label>
+                        <input type="password" id="resetNewPass" required class="w-full px-3 py-1.5 border rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div id="resetPassError" class="text-xs text-red-600 bg-red-50 p-2 rounded-lg hidden"></div>
+                    <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2.5 rounded-xl text-sm transition">Simpan Password Baru</button>
                 </form>
             </div>
 
@@ -389,8 +480,7 @@
 
     <!-- ==================== JAVASCRIPT ==================== -->
     <script>
-        // PENTING: GANTI URL DI BAWAH INI DENGAN URL DEPLOY APP SCRIPT ANDA SENDIRI
-        const API_URL = "https://script.google.com/macros/s/AKfycbzDfWZmfsc2XXfh61ZQo8vPurG8vmATNrqc0DnVkNN1WDmnbktSYZ6SeZHHNhCnJSM/exec";
+        const API_URL = "https://script.google.com/macros/s/AKfycbxE6vk6aNLUhX-CgTBv3qir1eNlCM7dMs5IrqA16zo7WVvU9e_VryRr908Yv-1lCZk/exec";
         
         let currentUser = null;
         let masterData = [];
@@ -402,6 +492,9 @@
         let activeTab = 'generator';
         let selectedMasterCatId = null;
         let currentDecodedBaseDesc = "";
+        
+        let pendingSignUpEmail = "";
+        let pendingResetEmail = "";
 
         // ==========================================
         // 1. AUTHENTICATION & NAVIGATION
@@ -416,8 +509,38 @@
                 setupUserUI();
             } else {
                 document.getElementById('authContainer').classList.remove('hidden');
+                showAuthCard('login');
             }
         });
+
+        function showAuthCard(cardType) {
+            const title = document.getElementById('authTitle');
+            const sub = document.getElementById('authSubtitle');
+            const fLogin = document.getElementById('formLogin');
+            const fSignUp = document.getElementById('formSignUp');
+            const fVerify = document.getElementById('formVerifyOtp');
+            const fForgot = document.getElementById('formForgotPass');
+            const fReset = document.getElementById('formResetPass');
+
+            [fLogin, fSignUp, fVerify, fForgot, fReset].forEach(f => f.classList.add('hidden'));
+
+            if (cardType === 'login') {
+                title.textContent = "Masuk ke Sistem"; sub.textContent = "Gunakan akun Anda untuk melanjutkan";
+                fLogin.classList.remove('hidden');
+            } else if (cardType === 'signup') {
+                title.textContent = "Daftar Akun Baru"; sub.textContent = "Lengkapi data diri Anda untuk pendaftaran";
+                fSignUp.classList.remove('hidden');
+            } else if (cardType === 'verify') {
+                title.textContent = "Verifikasi Kode OTP"; sub.textContent = "Masukkan kode yang dikirim ke email Anda";
+                fVerify.classList.remove('hidden');
+            } else if (cardType === 'forgot') {
+                title.textContent = "Lupa Password"; sub.textContent = "Atur ulang kata sandi melalui verifikasi email";
+                fForgot.classList.remove('hidden');
+            } else if (cardType === 'reset') {
+                title.textContent = "Reset Password"; sub.textContent = "Masukkan kode OTP dan password baru Anda";
+                fReset.classList.remove('hidden');
+            }
+        }
 
         async function handleLogin(e) {
             e.preventDefault();
@@ -439,11 +562,71 @@
             } catch(err) { alert("Error: " + err.message); } finally { hideLoader(); }
         }
 
+        async function handleSignUpRequest(e) {
+            e.preventDefault();
+            const errDiv = document.getElementById('signUpError'); errDiv.classList.add('hidden');
+            const payload = {
+                username: document.getElementById('regUsername').value.trim(), email: document.getElementById('regEmail').value.trim(),
+                phone: document.getElementById('regPhone').value.trim(), password: document.getElementById('regPassword').value.trim(),
+                company: document.getElementById('regCompany').value.trim(), division: document.getElementById('regDivision').value.trim(),
+                department: document.getElementById('regDepartment').value.trim()
+            };
+            showLoader("Mengirim Kode OTP...");
+            try {
+                const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: "signUp", data: payload }) });
+                const result = await res.json();
+                if (result.status === "success") {
+                    pendingSignUpEmail = payload.email; document.getElementById('otpEmailTarget').textContent = payload.email;
+                    showAuthCard('verify');
+                } else { errDiv.textContent = result.message; errDiv.classList.remove('hidden'); }
+            } catch (err) { errDiv.textContent = "Terjadi kesalahan: " + err.message; errDiv.classList.remove('hidden'); } finally { hideLoader(); }
+        }
+
+        async function handleVerifySignUpOtp(e) {
+            e.preventDefault();
+            const otp = document.getElementById('otpCodeInput').value.trim();
+            const errDiv = document.getElementById('otpError'); errDiv.classList.add('hidden');
+            showLoader("Memverifikasi OTP...");
+            try {
+                const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: "verifySignUpOtp", email: pendingSignUpEmail, otp: otp }) });
+                const result = await res.json();
+                if (result.status === "success") { alert(result.message); showAuthCard('login'); } 
+                else { errDiv.textContent = result.message; errDiv.classList.remove('hidden'); }
+            } catch (err) { errDiv.textContent = "Error: " + err.message; errDiv.classList.remove('hidden'); } finally { hideLoader(); }
+        }
+
+        async function handleForgotPasswordRequest(e) {
+            e.preventDefault();
+            const email = document.getElementById('forgotEmail').value.trim();
+            const errDiv = document.getElementById('forgotError'); errDiv.classList.add('hidden');
+            showLoader("Mengirim OTP Reset...");
+            try {
+                const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: "requestPasswordReset", email: email }) });
+                const result = await res.json();
+                if (result.status === "success") {
+                    pendingResetEmail = email; document.getElementById('resetEmailTarget').textContent = email;
+                    showAuthCard('reset');
+                } else { errDiv.textContent = result.message; errDiv.classList.remove('hidden'); }
+            } catch (err) { errDiv.textContent = "Error: " + err.message; errDiv.classList.remove('hidden'); } finally { hideLoader(); }
+        }
+
+        async function handleResetPasswordSubmit(e) {
+            e.preventDefault();
+            const otp = document.getElementById('resetOtpInput').value.trim();
+            const newPass = document.getElementById('resetNewPass').value.trim();
+            const errDiv = document.getElementById('resetPassError'); errDiv.classList.add('hidden');
+            showLoader("Memperbarui Password...");
+            try {
+                const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: "resetPassword", email: pendingResetEmail, otp: otp, newPassword: newPass }) });
+                const result = await res.json();
+                if (result.status === "success") { alert(result.message); showAuthCard('login'); } 
+                else { errDiv.textContent = result.message; errDiv.classList.remove('hidden'); }
+            } catch (err) { errDiv.textContent = "Error: " + err.message; errDiv.classList.remove('hidden'); } finally { hideLoader(); }
+        }
+
         function handleLogout() {
             if (isMasterDataDirty && !confirm("Ada perubahan Master Data yang belum disimpan. Yakin ingin keluar?")) return;
-            currentUser = null;
-            localStorage.removeItem('pn_session_v12');
-            location.reload();
+            currentUser = null; localStorage.removeItem('pn_session_v12'); location.reload();
         }
 
         function setupUserUI() {
@@ -464,9 +647,7 @@
                 if(suNav) suNav.classList.remove('hidden');
             }
 
-            fetchMasterFromCloud();
-            loadProfileView();
-            switchTab('generator');
+            fetchMasterFromCloud(); loadProfileView(); switchTab('generator');
         }
 
         function switchTab(tab) {
@@ -478,8 +659,7 @@
             }
             activeTab = tab;
             ['generator', 'decoder', 'catalog', 'profile', 'masterdata', 'approvals', 'userslist'].forEach(t => {
-                const view = document.getElementById(`view-${t}`);
-                const nav = document.getElementById(`nav-${t}`);
+                const view = document.getElementById(`view-${t}`); const nav = document.getElementById(`nav-${t}`);
                 if (view) view.classList.toggle('hidden', t !== tab);
                 if (nav) {
                     if (t === tab) nav.classList.add('sidebar-active', 'text-white');
@@ -513,7 +693,6 @@
             document.getElementById('profCompany').value = currentUser.company || '';
             document.getElementById('profDivision').value = currentUser.division || '';
             document.getElementById('profDepartment').value = currentUser.department || '';
-
             document.getElementById('profCurrentPass').value = '';
             document.getElementById('profNewPass').value = '';
             document.getElementById('profConfirmPass').value = '';
@@ -531,7 +710,6 @@
             if (newPass || confirmPass) {
                 if (newPass !== confirmPass) { errDiv.textContent = "Konfirmasi password baru tidak cocok!"; errDiv.classList.remove('hidden'); return; }
             }
-
             const payload = {
                 username: currentUser.username, currentPassword: currentPass, newPassword: newPass, confirmPassword: confirmPass,
                 name: document.getElementById('profName').value.trim(), email: document.getElementById('profEmail').value.trim(),
@@ -544,14 +722,9 @@
                 const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: "updateUserProfile", userData: payload }) });
                 const result = await res.json();
                 if (result.status === "success") {
-                    alert(result.message);
-                    currentUser = result.user;
-                    localStorage.setItem('pn_session_v12', JSON.stringify(currentUser));
-                    document.getElementById('userName').textContent = currentUser.name;
-                    loadProfileView();
-                } else {
-                    errDiv.textContent = result.message; errDiv.classList.remove('hidden');
-                }
+                    alert(result.message); currentUser = result.user; localStorage.setItem('pn_session_v12', JSON.stringify(currentUser));
+                    document.getElementById('userName').textContent = currentUser.name; loadProfileView();
+                } else { errDiv.textContent = result.message; errDiv.classList.remove('hidden'); }
             } catch (err) { errDiv.textContent = "Error: " + err.message; errDiv.classList.remove('hidden'); } finally { hideLoader(); }
         }
 
@@ -562,8 +735,7 @@
             showLoader("Load Master Data...");
             try {
                 const res = await fetch(`${API_URL}?action=getMasterData`);
-                masterData = await res.json();
-                originalMasterDataBackup = JSON.parse(JSON.stringify(masterData));
+                masterData = await res.json(); originalMasterDataBackup = JSON.parse(JSON.stringify(masterData));
                 initCategoryDropdowns();
             } catch(e) { console.error(e); } finally { hideLoader(); renderGeneratorForm(); }
         }
@@ -644,7 +816,6 @@
 
             if (seg.allowCustom) select.innerHTML += `<option value="__CUSTOM__">-- ISI CUSTOM VALUE --</option>`;
             if (select.options.length > 1) select.selectedIndex = 1;
-
             handleSegmentChange(catId, segIndex);
         }
 
@@ -658,7 +829,6 @@
                 customInput.classList.toggle('hidden', select.value !== "__CUSTOM__");
                 if(select.value !== "__CUSTOM__") customInput.value = '';
             }
-
             if (segIndex + 1 < category.segments.length) populateSegmentOptions(catId, segIndex + 1);
             else updateGeneratedPnDisplay();
         }
@@ -668,11 +838,7 @@
             const pnDisplay = document.getElementById('genPnDisplay');
             const descDisplay = document.getElementById('genDescDisplay');
 
-            if (!catId) {
-                pnDisplay.textContent = "--------------------";
-                descDisplay.textContent = "Deskripsi otomatis...";
-                return;
-            }
+            if (!catId) { pnDisplay.textContent = "--------------------"; descDisplay.textContent = "Deskripsi otomatis..."; return; }
 
             const category = masterData.find(c => c.id === catId);
             let rawPn = ""; let descValues = {}; let selectedCodeMap = {};
@@ -695,9 +861,7 @@
                         selectedCodeMap[seg.id] = codeVal;
                         const matchedOpt = seg.options.find(o => o.code.toUpperCase() === select.value.toUpperCase());
                         labelVal = (matchedOpt && matchedOpt.showInDesc === false) ? "" : (matchedOpt ? (matchedOpt.desc || matchedOpt.label) : select.value);
-                    } else {
-                        codeVal = "-".repeat(seg.length); labelVal = "..."; selectedCodeMap[seg.id] = "";
-                    }
+                    } else { codeVal = "-".repeat(seg.length); labelVal = "..."; selectedCodeMap[seg.id] = ""; }
                 }
                 rawPn += codeVal; descValues[seg.name] = labelVal;
             });
@@ -707,9 +871,7 @@
             let activeTemplate = category.descTemplate;
             if (category.descRules && category.descRules.length > 0) {
                 for (let rule of category.descRules) {
-                    if (selectedCodeMap[rule.segmentId] && selectedCodeMap[rule.segmentId].toUpperCase() === rule.triggerCode.toUpperCase()) {
-                        activeTemplate = rule.template; break;
-                    }
+                    if (selectedCodeMap[rule.segmentId] && selectedCodeMap[rule.segmentId].toUpperCase() === rule.triggerCode.toUpperCase()) { activeTemplate = rule.template; break; }
                 }
             }
 
@@ -1207,9 +1369,7 @@
             showLoader("Menyimpan...");
             try {
                 await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: "updateUserData", requesterUsername: currentUser.username, userData: userData }) });
-                alert("Pengguna diperbarui!");
-                document.getElementById('editUserModal').classList.add('hidden');
-                fetchUsersFromCloud();
+                alert("Pengguna diperbarui!"); document.getElementById('editUserModal').classList.add('hidden'); fetchUsersFromCloud();
             } catch (err) {} finally { hideLoader(); }
         }
     </script>
